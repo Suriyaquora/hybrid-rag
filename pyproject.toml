@@ -1,0 +1,49 @@
+[project]
+name = "hybrid-rag"
+version = "1.0.0"
+description = "Hybrid RAG system combining FAISS vector search with Neo4j Knowledge Graph, fused via Reciprocal Rank Fusion"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    # Core
+    "openai>=1.30.0",
+    "langchain>=0.2.0",
+    "langchain-openai>=0.1.0",
+    "langchain-community>=0.2.0",
+    "langchain-core>=0.2.0",
+"langchain-text-splitters>=0.2.0",
+    
+    # Vector Store
+    "faiss-cpu>=1.7.4",
+    
+    # Knowledge Graph
+    "neo4j>=5.19.0",
+    
+    # Document Processing
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
+    "docx2txt>=0.8",
+    "tiktoken>=0.7.0",
+    
+    # UI
+    "streamlit>=1.35.0",
+    
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "networkx>=3.3",
+    "pydantic>=2.7.0",
+    "tenacity>=8.3.0",
+]
+
+[project.scripts]
+hybrid-rag = "ui.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
