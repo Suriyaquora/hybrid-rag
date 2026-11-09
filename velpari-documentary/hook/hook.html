@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Vel Pari — 3-Minute Hook</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+@font-face{font-family:"NotoSerifTamil";src:url(fonts/noto-serif-tamil-tamil-400-normal.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"NotoSerifTamil";src:url(fonts/noto-serif-tamil-tamil-600-normal.woff2) format("woff2");font-weight:600}
+canvas{width:100vw;height:100vh;object-fit:contain;display:block}
+#hud{position:fixed;left:10px;bottom:8px;color:#aaa;font:12px monospace}
+</style></head><body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<div id="hud">Space: play/pause · ←/→ ±5s · ?t=seconds</div>
+<script>
+"use strict";
+/* ============ Deterministic 3-minute hook (1920x1080, pure function of time) ============ */
+const W=1920,H=1080,DUR=180;
+const cv=document.getElementById("c"),cx=cv.getContext("2d");
+const lerp=(a,b,u)=>a+(b-a)*u, clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)), ease=u=>u*u*(3-2*u);
+function RNG(seed){let s=seed|0;return()=>{s=(s*1664525+1013904223)|0;return((s>>>0)%1000003)/1000003}}
+const TAMIL='"NotoSerifTamil","Noto Serif Tamil","Noto Sans Tamil",Georgia,serif';
+window.fontsReady=Promise.all([document.fonts.load('400 100px NotoSerifTamil','தமிழ் இல்லை'),document.fonts.load('600 100px NotoSerifTamil','தமிழ் இல்லை')]);
+
+/* ---------- primitives ---------- */
+function glow(x,y,r,c,a){const g=cx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,c);g.addColorStop(1,"rgba(0,0,0,0)");cx.globalAlpha=a;cx.fillStyle=g;cx.fillRect(x-r,y-r,2*r,2*r);cx.globalAlpha=1}
+function sky(c1,c2,h=H*.8){const g=cx.createLinearGradient(0,-400,0,h);g.addColorStop(0,c1);g.addColorStop(1,c2);cx.fillStyle=g;cx.fillRect(-600,-600,W+1200,H+1200)}
+function ridge(color,base,amp,seed,px,t,peak){
+  cx.beginPath();cx.moveTo(-600,H+600);
+  for(let x=-600;x<=W+600;x+=12){
+    const X=x+px;let y=base+Math.sin(X*.004+seed)*amp+Math.sin(X*.011+seed*2)*amp*.45+Math.sin(X*.029+seed*3)*amp*.12;
+    if(peak){const d=(x-peak.x)/peak.w;y-=peak.h*Math.exp(-d*d)*(1+.05*Math.sin(x*.05));}
+    cx.lineTo(x,y);
+  }
+  cx.lineTo(W+600,H+600);cx.closePath();cx.fillStyle=color;cx.fill();
+}
+function stars(t,alpha=1,n=240){const r=RNG(11);cx.fillStyle="#fff";for(let i=0;i<n;i++){const x=r()*W,y=r()*H*.55,s=r()*2+.6,p=r()*6;cx.globalAlpha=alpha*(.35+.65*Math.abs(Math.sin(t*1.3+p)));cx.fillRect(x,y,s,s)}cx.globalAlpha=1}
+function rain(t,amt=1,wind=40){cx.strokeStyle="rgba(170,190,210,.35)";cx.lineWidth=1.5;cx.beginPath();const r=RNG(9);for(let i=0;i<260*amt;i++){const x=((r()*W*1.3)+t*wind*6)%(W+200)-100,y=((r()*H)+t*1400)%H;cx.moveTo(x,y);cx.lineTo(x-wind*.5,y+34)}cx.stroke()}
+function embers(t,n,col="#ff9a3a",rise=90,seed=3,area=[0,W,0,H]){const r=RNG(seed);for(let i=0;i<n;i++){const x0=lerp(area[0],area[1],r()),sp=rise*(.5+r()),ph=r()*H,sz=1+r()*3;const y=((ph-t*sp)%H+H)%H;const x=x0+Math.sin(t*.8+i)*30;cx.globalAlpha=.4+.6*Math.abs(Math.sin(t*3+i));cx.fillStyle=col;cx.fillRect(x,y,sz,sz)}cx.globalAlpha=1}
+function mist(t,y,a=.15,col="#ffffff"){for(let i=0;i<5;i++){glow(((i*480+t*20*(i%2?1:-1))%(W+900)+W+900)%(W+900)-300,y+Math.sin(t*.2+i)*30,520,col,a)}}
+function flash(t,times,tot=0){let f=0;for(const k of times){const d=t-k;if(d>=0)f=Math.max(f,Math.exp(-d*9)*(0.55+.45*Math.sin(k*13)))}return f}
+
+/* silhouette man: x,y at feet, h height */
+function man(x,y,h,t,o={}){
+  const s=h/100,c=o.col||"#05060a";cx.save();cx.translate(x,y);cx.scale(o.flip?-s:s,s);
+  cx.shadowColor=o.rim||"rgba(255,190,120,.8)";cx.shadowBlur=o.rimBlur??14;cx.fillStyle=c;
+  const sway=Math.sin(t*2.2)*1.5;
+  if(o.sit){ // seated, cross-legged, with shoulders, arm and turban
+    cx.beginPath();cx.ellipse(0,-12,40,13,0,0,7);cx.fill();
+    cx.beginPath();cx.moveTo(-24,-16);cx.quadraticCurveTo(-30,-48,-17,-68);cx.lineTo(17,-68);cx.quadraticCurveTo(30,-48,24,-16);cx.closePath();cx.fill();
+    cx.beginPath();cx.moveTo(14,-64);cx.quadraticCurveTo(34,-40,22,-20);cx.lineTo(14,-22);cx.quadraticCurveTo(24,-40,8,-60);cx.closePath();cx.fill();
+    cx.beginPath();cx.arc(0,-79,11,0,7);cx.fill();cx.beginPath();cx.ellipse(0,-87,13,6,0,0,7);cx.fill();
+    cx.fillRect(-3,-72,6,6);
+  }else{
+    cx.fillRect(-9,-48,7,48);cx.fillRect(2,-48,7,48);
+    cx.beginPath();cx.moveTo(-14,-46);cx.lineTo(-11,-86);cx.lineTo(11,-86);cx.lineTo(14,-46);cx.closePath();cx.fill();
+    cx.beginPath();cx.arc(0,-94,9.5,0,7);cx.fill();
+    // turban
+    cx.beginPath();cx.ellipse(0,-100,11,5,0,0,7);cx.fill();
+    // cloak flowing back
+    cx.beginPath();cx.moveTo(-8,-86);
+    const w=(o.wind??1);
+    cx.bezierCurveTo(-40*w,-84+sway,-70*w,-70+Math.sin(t*3)*6,-92*w,-40+Math.sin(t*3.4)*10);
+    cx.bezierCurveTo(-60*w,-44,-34*w,-30,-10,-28);cx.closePath();cx.fill();
+    if(o.spear){cx.fillRect(16,-150,3,150);cx.beginPath();cx.moveTo(17.5,-170);cx.lineTo(13,-150);cx.lineTo(22,-150);cx.closePath();cx.fill();cx.fillRect(10,-86,10,4)}
+    if(o.bow){cx.lineWidth=2.5;cx.strokeStyle=c;cx.beginPath();cx.arc(20,-70,28,-1.2,1.2);cx.stroke()}
+  }
+  cx.restore();
+}
+function elephant(x,y,s,t,ph,flag){
+  cx.save();cx.translate(x,y);cx.scale(s,s);cx.fillStyle="#04050a";cx.shadowColor="rgba(255,150,70,.7)";cx.shadowBlur=18;
+  const step=Math.sin(t*3.2+ph);
+  for(const [lx,k] of [[-90,0],[-40,Math.PI],[50,Math.PI],[100,0]]){const sw=Math.sin(t*3.2+ph+k)*14;cx.fillRect(lx-14+sw,-40,28,90);}
+  cx.beginPath();cx.ellipse(0,-100,160,98,0,0,7);cx.fill();                 // body
+  cx.beginPath();cx.ellipse(160,-130,62,70,.2,0,7);cx.fill();               // head
+  cx.beginPath();cx.ellipse(120,-120,34,70,.1,0,7);cx.fill();                // ear
+  cx.beginPath();cx.moveTo(200,-110);cx.bezierCurveTo(250,-60,236,0+step*8,200,30+step*10);cx.lineTo(188,26+step*10);cx.bezierCurveTo(216,-10,218,-60,184,-100);cx.fill(); // trunk
+  cx.strokeStyle="#cdbf9f";cx.lineWidth=7;cx.beginPath();cx.moveTo(196,-96);cx.quadraticCurveTo(250,-84,262,-120);cx.stroke(); // tusk
+  cx.fillStyle="#0a0b10";cx.fillRect(-60,-215,120,38);                          // howdah
+  cx.fillRect(-4,-330,6,120);                                                  // pole
+  cx.fillStyle=flag;cx.shadowBlur=0;cx.beginPath();cx.moveTo(2,-330);cx.lineTo(62+Math.sin(t*5+ph)*8,-312+Math.sin(t*6+ph)*5);cx.lineTo(2,-292);cx.closePath();cx.fill();
+  cx.restore();
+}
+function torches(x0,x1,y0,y1,n,seed,col,t,spread=1){
+  const r=RNG(seed);cx.globalCompositeOperation="lighter";
+  for(let i=0;i<n;i++){const u=r(),v=r(),x=lerp(x0,x1,u),y=lerp(y0,y1,Math.pow(v,.8)),fl=.6+.4*Math.sin(t*9+i*1.7);
+    cx.fillStyle=col;cx.globalAlpha=.9*fl;cx.fillRect(x,y,2.6,2.6);cx.globalAlpha=.16*fl;cx.beginPath();cx.arc(x+1,y+1,8,0,7);cx.fill()}
+  cx.globalAlpha=1;cx.globalCompositeOperation="source-over";
+}
+function banner(x,y,h,col,t,ph=0){cx.save();cx.translate(x,y);cx.fillStyle="#0b0b10";cx.fillRect(-2,-h,4,h);cx.fillStyle=col;cx.shadowColor=col;cx.shadowBlur=12;
+  cx.beginPath();cx.moveTo(2,-h);for(let i=0;i<=10;i++){cx.lineTo(2+i*7,-h+Math.sin(t*4+ph+i*.6)*5+i*.6)}for(let i=10;i>=0;i--){cx.lineTo(2+i*7,-h+60+Math.sin(t*4+ph+i*.6)*5+i*.6)}cx.closePath();cx.fill();cx.restore()}
+function petals(t,n,seed=4){const r=RNG(seed);cx.fillStyle="#fffbea";for(let i=0;i<n;i++){const x0=r()*W,sp=30+r()*60,ph=r()*H;const y=((ph+t*sp)%(H+100))-50,x=x0+Math.sin(t*.9+i)*60+t*14;cx.globalAlpha=.85;cx.beginPath();cx.ellipse(x%W,y,4,2.2,t+i,0,7);cx.fill()}cx.globalAlpha=1}
+function creeper(x,y,u,t){
+  const gx=x-190,n=90,pt=k=>[gx+k*400+Math.sin(k*16+t*.6)*9,y-30-k*300*(.55+.45*Math.sin(k*3))+Math.cos(k*14)*8];
+  const N=Math.floor(n*u);cx.lineCap="round";cx.strokeStyle="#35703a";cx.lineWidth=7;cx.beginPath();
+  for(let i=0;i<=N;i++){const [px,py]=pt(i/n);i?cx.lineTo(px,py):cx.moveTo(px,py)}cx.stroke();
+  cx.strokeStyle="#4f9a4c";cx.lineWidth=3;cx.stroke();
+  const r=RNG(77);
+  for(let i=0;i<46;i++){const k=r()*u,[px,py]=pt(k),a=r()*6.28;cx.fillStyle=i%2?"#3f8641":"#2f6f35";cx.save();cx.translate(px,py);cx.rotate(a+Math.sin(t+i)*.12);cx.beginPath();cx.ellipse(10,0,13,6,0,0,7);cx.fill();cx.restore()}
+  const r2=RNG(78);cx.globalCompositeOperation="lighter";
+  for(let i=0;i<34;i++){const k=r2()*u,[px,py]=pt(k);glow(px,py,22,"#fff6d8",.35);}
+  cx.globalCompositeOperation="source-over";
+  const r3=RNG(79);for(let i=0;i<34;i++){const k=r3()*u,[px,py]=pt(k);cx.fillStyle="#fffdf2";for(let j=0;j<5;j++){cx.save();cx.translate(px,py);cx.rotate(j*1.2566+t*.1);cx.beginPath();cx.ellipse(0,-6,3.6,7,0,0,7);cx.fill();cx.restore()}}
+}
+function chariot(x,y,t){cx.save();cx.translate(x,y);cx.scale(1.5,1.5);cx.fillStyle="#090604";cx.strokeStyle="#140d08";cx.lineWidth=6;
+  cx.fillRect(-120,-110,240,44);cx.fillRect(-100,-200,8,92);cx.fillRect(92,-200,8,92);cx.fillRect(-100,-206,200,8);
+  for(const dx of[-82,82]){cx.beginPath();cx.arc(dx,-44,48,0,7);cx.stroke();for(let k=0;k<12;k++){const a=k*Math.PI/6;cx.beginPath();cx.moveTo(dx,-44);cx.lineTo(dx+Math.cos(a)*48,-44+Math.sin(a)*48);cx.stroke()}}
+  cx.restore()}
+
+/* ---------- cinematic text ---------- */
+function text(str,sub,t0,t1,tt,o={}){
+  if(tt<t0||tt>t1)return;const a=Math.min(1,(tt-t0)/.8,(t1-tt)/.8);if(a<=0)return;
+  cx.save();cx.globalAlpha=a;cx.textAlign="center";cx.shadowColor="#000";cx.shadowBlur=30;
+  const y=o.y??H*.5, sz=o.size??120, drift=(1-a)*8;
+  cx.fillStyle=o.col||"#f6e6c6";cx.font=`600 ${sz}px ${TAMIL}`;
+  if(o.track){cx.letterSpacing=o.track+"px"}
+  cx.fillText(str,W/2,y+drift);
+  if(sub){cx.shadowBlur=18;cx.font=`${o.subSize??40}px Georgia,serif`;cx.fillStyle=o.subCol||"#e8b25a";cx.letterSpacing="6px";cx.fillText(sub,W/2,y+(str?sz*.85:0)+drift)}
+  cx.restore();cx.letterSpacing="0px";
+}
+
+/* ---------- shots ---------- */
+// every shot: (t = absolute, u = 0..1 within shot, l = local seconds)
+const CAM=(z0,z1,x0,x1,y0,y1)=>u=>{const e=ease(u);return{z:lerp(z0,z1,e),x:lerp(x0,x1,e),y:lerp(y0,y1,e)}};
+const SHOTS=[];
+function shot(a,b,cam,draw,over){SHOTS.push({a,b,cam,draw,over})}
+
+// 1. Cold open: storm, torchlit armies
+shot(0,12,CAM(1,1.18,0,-30,0,-20),(t,u)=>{
+  sky("#05070c","#1a2230");rain(t,1,50);
+  ridge("#0d141c",H*.56,40,1,t*1,t,{x:W*.5,h:330,w:260});glow(W*.5,H*.46,380,"#ffb056",.10+.06*Math.sin(t*3));
+  { const r=RNG(41);for(let i=0;i<22;i++){glow(W*.5+(r()-.5)*420,H*.5+r()*120,16,"#ffb056",.7)} }
+  ridge("#080d13",H*.72,50,2,t*6,t);
+  torches(-100,W*.42,H*.62,H*.86,420,5,"#ff5a3a",t);torches(W*.58,W+100,H*.62,H*.86,420,6,"#4fd2e0",t);torches(W*.2,W*.8,H*.78,H*.95,500,7,"#ffb347",t);
+  ridge("#030508",H*.9,36,3,t*10,t);
+  for(let i=0;i<14;i++)banner(100+i*140,H*.93-(i%3)*10,200,["#c43a3a","#e0a82a","#2fa6b5"][i%3],t,i);
+},(t)=>{
+  const f=flash(t,[1.5,4.0,4.4,8.0,10.5]);if(f>0){cx.fillStyle=`rgba(210,225,255,${f*.55})`;cx.fillRect(0,0,W,H)}
+  text("மூன்று பேரரசுகள்","THREE EMPIRES",2.6,6.2,t,{y:H*.46,size:110});
+  text("ஒரே ஒரு மலை","ONE MOUNTAIN",7.2,11.4,t,{y:H*.46,size:130,col:"#ffd68a"});
+});
+// 2. Elephants march
+shot(12,30,CAM(1.05,1.0,120,-120,0,0),(t,u)=>{
+  sky("#1a0a0c","#d9622e");glow(W*.7,H*.62,700,"#ffb066",.8);
+  ridge("#3a1612",H*.66,30,4,t*8,t);ridge("#1d0b09",H*.74,40,5,t*14,t);
+  torches(0,W,H*.64,H*.78,500,8,"#ffb347",t);
+  const l=t-12;
+  for(let i=0;i<30;i++){man(((i*95+l*40)%(W+300))-150,H*.80+(i%4)*6,70+(i%3)*5,t,{spear:1,rim:"rgba(255,140,60,.6)",rimBlur:8,wind:.4})}
+  elephant(((l*65)%(W+800))-400,H*.88,.75,t,0,"#c43a3a");
+  elephant(((l*55+700)%(W+800))-400,H*.92,.95,t,2,"#e0a82a");
+  elephant(((l*70+1300)%(W+800))-400,H*.97,1.15,t,4,"#2fa6b5");
+  embers(t,70,"#ffb347",120,7);
+},(t)=>{text("வெல்லாத நாடே இல்லை","NO KINGDOM HAD EVER STOOD AGAINST THEM",16,25,t,{y:H*.4,size:92,subSize:34})});
+// 3. Parambu reveal
+shot(30,45,CAM(1.35,1.0,0,0,160,-30),(t,u)=>{
+  sky("#17213f","#f2a766");glow(W*.5,H*.58,900,"#ffd9a0",.7);
+  ridge("#5d5b7a",H*.60,36,6,t*2,t);ridge("#434b6b",H*.66,40,7,t*4,t,{x:W*.5,h:300,w:240});ridge("#2a3550",H*.74,38,8,t*7,t);ridge("#141c2e",H*.84,34,9,t*10,t);
+  const r=RNG(21);for(let i=0;i<46;i++){const x=r()*W,y=H*(.70+r()*.2);glow(x,y,26,"#ffb056",.55+.3*Math.sin(t*4+i))}
+  mist(t,H*.66,.16);
+},(t)=>{text("பறம்பு நாடு","300 VILLAGES  ·  NO WALLS  ·  NO CROWN",33,43,t,{y:H*.36,size:110,subSize:32})});
+// 4. Pari on the peak
+shot(45,70,CAM(1.0,1.75,0,0,0,110),(t,u)=>{
+  sky("#241a3e","#ffc27a");glow(W*.5,H*.50,800,"#ffe2a8",.95);cx.fillStyle="#fff1cf";cx.beginPath();cx.arc(W*.5,H*.50,60,0,7);cx.fill();
+  ridge("#6a4a5a",H*.58,30,3,t*1,t);ridge("#3b2c46",H*.68,36,2,t*3,t,{x:W*.5,h:300,w:300});ridge("#150f1d",H*.9,30,5,t*8,t);
+  man(W*.5-20,H*.68-296,150,t,{spear:1,wind:1.25,rim:"rgba(255,230,170,.9)",rimBlur:22});
+  const r=RNG(31);cx.strokeStyle="#0a0710";cx.lineWidth=2;for(let i=0;i<9;i++){const bx=((r()*W+t*(40+i*6))%W),by=H*(.2+r()*.2);cx.beginPath();cx.moveTo(bx-14,by);cx.quadraticCurveTo(bx,by-8+Math.sin(t*8+i)*5,bx+14,by);cx.stroke()}
+  mist(t,H*.72,.14,"#ffe6c0");
+},(t)=>{text("வேள் பாரி","THE CHIEFTAIN WHO ANSWERED TO NO CROWN",50,66,t,{y:H*.80,size:150,col:"#fff1cf",subSize:34})});
+// 5. Jasmine and chariot
+shot(70,95,CAM(1.0,1.22,-60,40,0,-30),(t,u)=>{
+  sky("#2b1f45","#ffb15e");glow(W*.25,H*.55,900,"#ffd08c",.8);
+  ridge("#6c4b5c",H*.60,28,2,t*2,t);ridge("#3b2b3f",H*.70,34,4,t*5,t);ridge("#1c1626",H*.82,30,6,t*8,t);
+  cx.fillStyle="#120d19";cx.fillRect(-600,H*.80,W+1200,H);
+  chariot(W*.5,H*.84,t);creeper(W*.5,H*.84,clamp((t-72)/14),t);petals(t,60);glow(W*.5,H*.62,500,"#fff4d0",.14*clamp((t-76)/10));
+},(t)=>{text("முல்லைக்குத் தேர் கொடுத்தவன்","THE MAN WHO GAVE HIS CHARIOT TO A JASMINE VINE",74,88,t,{y:H*.27,size:92,subSize:32})});
+// 6. Poet and chieftain
+shot(95,120,CAM(1.25,1.6,0,0,-120,-170),(t,u)=>{
+  sky("#02040a","#13203c");stars(t,1,360);
+  // shooting stars
+  for(const k of[100,108,115]){const d=t-k;if(d>0&&d<1.1){const x=W*.2+d*700+(k%7)*120,y=H*.1+d*260;cx.strokeStyle=`rgba(255,255,255,${1-d/1.1})`;cx.lineWidth=3;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x-130,y-48);cx.stroke()}}
+  glow(W*.78,H*.2,420,"#cfe0ff",.4);cx.fillStyle="#f4f7ff";cx.beginPath();cx.arc(W*.78,H*.2,50,0,7);cx.fill();
+  ridge("#17233a",H*.66,26,3,t*1,t);ridge("#0b1322",H*.76,30,5,t*3,t);
+  cx.fillStyle="#04060b";cx.beginPath();cx.moveTo(W*.25,H*.82);cx.quadraticCurveTo(W*.45,H*.62,W*.75,H*.82);cx.closePath();cx.fill();ridge("#04060b",H*.9,20,2,t*4,t);
+  man(W*.45,H*.745,190,t,{sit:1,rim:"rgba(170,200,255,.9)",rimBlur:22});man(W*.55,H*.745,180,t,{sit:1,flip:1,rim:"rgba(170,200,255,.9)",rimBlur:22});
+  embers(t,60,"#ffe9a8",30,12,[W*.2,W*.8,H*.5,H]);
+},(t)=>{text("ஒரு கவிஞன்.  ஒரு தலைவன்.","A POET.  A CHIEFTAIN.  ONE UNBREAKABLE BOND.",99,114,t,{y:H*.22,size:96,subSize:32})});
+// 7. Ultimatum
+shot(120,140,CAM(1.0,1.15,-60,40,0,0),(t,u)=>{
+  sky("#1a0b25","#d0475a");glow(W*.85,H*.7,800,"#ff8a70",.8);
+  ridge("#4a2548",H*.64,30,2,t*2,t);ridge("#2a1630",H*.76,34,4,t*4,t);ridge("#120914",H*.86,26,6,t*7,t);
+  const l=t-120;
+  for(let i=0;i<3;i++){const x=-80+i*60+ease(clamp(l/6))*(480+i*40);banner(x,H*.86,330-i*20,["#c43a3a","#e0a82a","#2fa6b5"][i],t,i);for(let k=0;k<5;k++)man(x-60+k*26,H*.88+k%2*6,100,t,{spear:1,rim:"rgba(255,120,100,.6)",flip:0})}
+  man(W*.78,H*.88,190,t,{flip:1,spear:1,wind:1.2,rim:"rgba(255,180,140,.9)",rimBlur:20});
+  embers(t,40,"#ff8a60",60,5);
+},(t)=>{text("பணிய மாட்டேன்.","“I WILL NOT BOW.”",124,136,t,{y:H*.3,size:140,col:"#ffd0b8",subSize:44})});
+// 8. Siege montage — four rapid cuts
+const SIEGE=[
+ (t,l)=>{sky("#100505","#8a3010");glow(W*.5,H*.7,1000,"#ff6a20",.8);ridge("#3a160c",H*.6,40,2,t*3,t,{x:W*.5,h:240,w:260});ridge("#180804",H*.8,40,4,t*6,t);torches(0,W,H*.55,H*.9,500,2,"#ff8a2a",t);embers(t,160,"#ff9a3a",160,9);mist(t,H*.7,.2,"#ff7a40")},
+ (t,l)=>{sky("#0a0f16","#37424f");rain(t,1.4,70);ridge("#222c38",H*.62,36,3,t*2,t,{x:W*.5,h:260,w:280});ridge("#0e141c",H*.8,34,5,t*5,t);
+   for(let i=0;i<4;i++)elephant(-300+((l*160+i*520)%(W+900)),H*.95+(i%2)*18,.9+i*.08,t,i,["#c43a3a","#e0a82a","#2fa6b5","#c43a3a"][i])},
+ (t,l)=>{sky("#1b0d14","#b8462e");glow(W*.2,H*.4,700,"#ff9a5a",.6);ridge("#2e1319",H*.7,40,4,t*3,t);
+   cx.fillStyle="#08040a";cx.beginPath();cx.moveTo(-100,H*.7);cx.lineTo(W*.6,H*.52);cx.lineTo(W+100,H*.9);cx.lineTo(W+100,H+100);cx.lineTo(-100,H+100);cx.closePath();cx.fill();
+   for(let i=0;i<7;i++)man(W*.2+i*110,H*(.72-i*.026),120,t,{bow:1,rim:"rgba(255,160,90,.7)",flip:0});
+   const r=RNG(3);cx.strokeStyle="rgba(255,230,180,.8)";cx.lineWidth=2.5;for(let i=0;i<24;i++){const p=((l*1.3+r())%1),x=W*.15+i*60+p*900,y=H*.55+p*250-Math.sin(p*3.14)*260;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x-26,y+10-p*16);cx.stroke()}
+   embers(t,60,"#ff9a3a",90,14)},
+ (t,l)=>{sky("#0b0707","#5a1f10");glow(W*.5,H*.6,1100,"#ff5a1a",.7);ridge("#2a0f08",H*.58,30,6,t*2,t,{x:W*.5,h:300,w:230});torches(0,W,H*.5,H*.95,800,13,"#ff6a2a",t);embers(t,220,"#ffb347",200,15);
+   man(W*.5,H*.58-230,120,t,{spear:1,wind:1.3,rim:"rgba(255,160,70,1)",rimBlur:24})}
+];
+shot(140,160,CAM(1.0,1.08,0,0,0,0),(t,u)=>{const idx=Math.min(3,Math.floor((t-140)/5)),l=(t-140)%5;cx.save();const z=1+l*.02;cx.translate(W/2,H/2);cx.scale(z,z);cx.translate(-W/2,-H/2);SIEGE[idx](t,l);cx.restore()},(t)=>{
+  const f=flash(t,[148.2,152.6,156.1]);if(f>0){cx.fillStyle=`rgba(255,235,210,${f*.5})`;cx.fillRect(0,0,W,H)}
+  text("முற்றுகை","THE SIEGE",141.5,146.5,t,{y:H*.45,size:150,col:"#ffd9b0"});
+  text("மாதங்கள்… நாட்கள் அல்ல.","MONTHS. NOT DAYS.",151,158.5,t,{y:H*.4,size:92,col:"#ffe6c8",subSize:34});
+});
+// 9. Hush — single jasmine
+shot(160,170,CAM(1,1.25,0,0,0,0),(t,u)=>{
+  cx.fillStyle="#020204";cx.fillRect(-600,-600,W+1200,H+1200);const a=clamp((t-160)/2);
+  glow(W/2,H*.52,520,"#fff4d0",.35*a);cx.save();cx.translate(W/2,H*.52);cx.rotate(Math.sin(t*.6)*.08);
+  cx.fillStyle="#fffbe8";cx.shadowColor="#fff4d0";cx.shadowBlur=40*a;cx.globalAlpha=a;
+  for(let k=0;k<5;k++){cx.rotate(Math.PI*2/5);cx.beginPath();cx.ellipse(0,-46,22,48,0,0,7);cx.fill()}cx.restore();cx.globalAlpha=1;
+  petals(t,24,8)},(t)=>{text("படையால் முடியாததை…","WHAT AN ARMY COULD NOT DO…",162,169.6,t,{y:H*.82,size:84,subSize:32})});
+// 10. Title card
+shot(170,180,CAM(1.12,1.0,0,0,0,0),(t,u)=>{
+  cx.fillStyle="#030305";cx.fillRect(-600,-600,W+1200,H+1200);const a=clamp((t-170)/1.2);
+  cx.globalCompositeOperation="lighter";for(let i=0;i<14;i++){cx.save();cx.translate(W/2,H*.46);cx.rotate(i*Math.PI/7+t*.03);const g=cx.createLinearGradient(0,0,900,0);g.addColorStop(0,"rgba(255,200,110,.18)");g.addColorStop(1,"rgba(255,200,110,0)");cx.fillStyle=g;cx.globalAlpha=a;cx.beginPath();cx.moveTo(0,-14);cx.lineTo(900,-60);cx.lineTo(900,60);cx.lineTo(0,14);cx.fill();cx.restore()}cx.globalCompositeOperation="source-over";
+  glow(W/2,H*.46,620,"#e8a84a",.45*a);embers(t,60,"#ffd68a",50,20)},(t)=>{
+  const f=Math.exp(-(t-170)*5)*(t>=170?1:0);if(f>0){cx.fillStyle=`rgba(255,240,210,${f*.7})`;cx.fillRect(0,0,W,H)}
+  text("வேள்பாரி","",170.2,179,t,{y:H*.52,size:240,col:"#f9d58a"});
+  text("","THE LAST HILL KING",172,179,t,{y:H*.52-300,size:40,subSize:58,subCol:"#f3e7cf"});
+  text("","FULL DOCUMENTARY  ·  COMING SOON",175,179.2,t,{y:H*.80,size:30,subSize:34,subCol:"#e8b25a"});
+  text("","Inspired by the novel “Veera Yuga Nayagan Vel Pari” by Su. Venkatesan  ·  Sangam poetry of Kapilar",175.6,179.2,t,{y:H*.885,size:22,subSize:22,subCol:"#a99c80"});
+});
+
+/* ---------- compositor ---------- */
+function drawAt(t){
+  t=clamp(t,0,DUR-1e-3);
+  let sh=SHOTS.find(s=>t>=s.a&&t<s.b)||SHOTS[SHOTS.length-1];
+  const u=(t-sh.a)/(sh.b-sh.a),c=sh.cam(u);
+  cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,W,H);
+  cx.save();cx.translate(W/2,H/2);cx.scale(c.z,c.z);cx.translate(-W/2+c.x,-H/2+c.y);
+  sh.draw(t,u);cx.restore();
+  // vignette
+  const v=cx.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.95);v.addColorStop(0,"rgba(0,0,0,0)");v.addColorStop(1,"rgba(0,0,0,.65)");cx.fillStyle=v;cx.fillRect(0,0,W,H);
+  sh.over&&sh.over(t);
+  // fades: shot dissolve to black (dip) at cuts, global in/out
+  const e=Math.min(t-sh.a,sh.b-t);let dip=e<.35?(1-e/.35):0;if(sh.a===140&&t<140.15)dip=0;
+  const g=Math.max(dip*.9,clamp(1-t/1.5),clamp((t-(DUR-1.2))/1.2));
+  if(g>0){cx.fillStyle=`rgba(0,0,0,${g})`;cx.fillRect(0,0,W,H)}
+  // cinematic bars
+  cx.fillStyle="#000";cx.fillRect(0,0,W,H*.075);cx.fillRect(0,H*.925,W,H*.075);
+}
+window.drawAt=drawAt;window.DUR=DUR;
+
+/* ---------- preview player ---------- */
+const q=new URLSearchParams(location.search);
+if(!q.has("render")){
+  let T=+(q.get("t")||0),playing=!q.has("paused"),last=performance.now();
+  addEventListener("keydown",e=>{if(e.code==="Space"){playing=!playing;e.preventDefault()}if(e.code==="ArrowRight")T+=5;if(e.code==="ArrowLeft")T-=5});
+  (function loop(n){const dt=(n-last)/1000;last=n;if(playing)T=(T+dt)%DUR;drawAt(T);requestAnimationFrame(loop)})(last);
+}
+</script></body></html>
