@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vel Pari — The Last Hill King (A One-Hour Documentary in Code)</title>
+<style>
+  :root{--ink:#f3e7cf;--gold:#e8b25a;--bg:#07080c}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--ink);font-family:Georgia,"Noto Serif Tamil","Noto Serif",serif;overflow:hidden}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{width:100%;height:100%;display:block}
+  .bar{position:fixed;left:0;right:0;height:9vh;background:#000;z-index:2;pointer-events:none}
+  #top{top:0}#bot{bottom:0}
+  #chapter{position:fixed;top:1.6vh;left:3vw;z-index:3;font-size:clamp(11px,1.4vw,16px);letter-spacing:.25em;text-transform:uppercase;color:var(--gold);opacity:.9}
+  #clock{position:fixed;top:1.6vh;right:3vw;z-index:3;font:clamp(11px,1.3vw,15px) ui-monospace,monospace;color:#cbbd9f}
+  #sub{position:fixed;left:50%;bottom:11vh;transform:translateX(-50%);width:min(900px,90vw);text-align:center;z-index:3;
+       font-size:clamp(15px,2.2vw,28px);line-height:1.45;text-shadow:0 2px 8px #000,0 0 18px #000;transition:opacity .8s}
+  #sub q{display:block;margin-top:.6em;font-style:italic;color:var(--gold);font-size:.82em;quotes:none}
+  #title{position:fixed;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;transition:opacity 1.2s}
+  #title h1{font-size:clamp(28px,6vw,84px);font-weight:400;letter-spacing:.08em;text-shadow:0 0 30px #000}
+  #title h2{font-size:clamp(14px,2.2vw,30px);font-weight:400;color:var(--gold);margin-top:.5em;letter-spacing:.2em}
+  #ui{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:8px 3vw 10px;background:linear-gradient(transparent,#000c);
+      opacity:0;transition:opacity .4s}
+  body:hover #ui,#ui.show{opacity:1}
+  #prog{position:relative;height:14px;cursor:pointer;margin-bottom:6px}
+  #prog .rail{position:absolute;top:5px;left:0;right:0;height:4px;background:#ffffff30;border-radius:2px}
+  #prog .fill{position:absolute;top:5px;left:0;height:4px;background:var(--gold);border-radius:2px;width:0}
+  #prog .tick{position:absolute;top:2px;width:2px;height:10px;background:#000a}
+  #row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font:13px system-ui,sans-serif}
+  button,select{background:#1b1c24;color:var(--ink);border:1px solid #ffffff30;border-radius:6px;padding:5px 10px;cursor:pointer;font:inherit}
+  button:hover{border-color:var(--gold)}
+  button.on{background:#4a3513;border-color:var(--gold)}
+  #chs{max-width:34vw}
+  #start{position:fixed;inset:0;z-index:10;background:radial-gradient(circle at 50% 40%,#2a1c0e,#050507);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:18px;padding:24px}
+  #start h1{font-weight:400;font-size:clamp(30px,6vw,76px);letter-spacing:.06em}
+  #start p{max-width:680px;color:#cbbd9f;font-size:clamp(14px,1.6vw,19px);line-height:1.55}
+  #start button{font-size:20px;padding:12px 34px;border-color:var(--gold);background:#3b2a10}
+  #start small{color:#8d826b;max-width:640px}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas></div>
+<div class="bar" id="top"></div><div class="bar" id="bot"></div>
+<div id="chapter"></div><div id="clock">00:00 / 60:00</div>
+<div id="title"><h1></h1><h2></h2></div>
+<div id="sub"></div>
+<div id="ui">
+  <div id="prog"><div class="rail"></div><div class="fill"></div></div>
+  <div id="row">
+    <button id="play">Pause</button>
+    <button id="back">−30s</button><button id="fwd">+30s</button>
+    <select id="chs"></select>
+    <select id="spd"><option value="1">1× real-time</option><option value="10">10× preview</option><option value="60">60× scrub</option></select>
+    <button id="nar" class="on">Narration</button>
+    <button id="snd" class="on">Music</button>
+    <button id="fs">Fullscreen</button>
+    <span style="opacity:.6">Space = play/pause · ←/→ = ±30s</span>
+  </div>
+</div>
+
+<div id="start">
+  <h1>வேள்பாரி · VEL PARI</h1>
+  <div style="color:var(--gold);letter-spacing:.3em;font-size:14px">THE LAST HILL KING OF PARAMBU NADU</div>
+  <p>A one-hour documentary, rendered entirely in code. Sixty-eight story beats, twelve chapters, procedural landscapes and generated music — inspired by the Sangam poems of Kapilar and the epic <em>Veera Yuga Nayagan Vel Pari</em> by Su. Venkatesan.</p>
+  <button id="go">▶ Begin the film</button>
+  <small>Sound on. Narration uses your browser's built-in voice. Tamil quotations are paraphrased from the Purananuru; scenes marked “tradition” are legend, not recorded history. Dramatised adaptation — not a reproduction of the novel's text.</small>
+</div>
+
+<script>
+"use strict";
+/* ============================ SCREENPLAY ============================ */
+/* dur = relative seconds; whole film is normalised to exactly 3600 s.   */
+const CHAPTERS = [
+ ["Prologue","A Land Before Kings","தமிழகம்"],
+ ["I","Parambu Nadu","பறம்பு நாடு"],
+ ["II","The Poet and the Chieftain","கபிலர் · பாரி"],
+ ["III","The Jasmine and the Chariot","முல்லைக்குத் தேர்"],
+ ["IV","The Three Crowns","மூவேந்தர்"],
+ ["V","The Ultimatum","ஓலை"],
+ ["VI","Council of the Hills","மலை மன்றம்"],
+ ["VII","The Siege","முற்றுகை"],
+ ["VIII","Parrots and Granaries","கிளிகள்"],
+ ["IX","The Fall","வீழ்ச்சி"],
+ ["X","The Vow of Kapilar","கபிலரின் சூளுரை"],
+ ["Epilogue","The Kingdom That Did Not Die","பாரி வாழ்கிறான்"]
+];
+
+// [chapter, preset, extras, dur, narration, optional quote]
+const B = [
+// ---- Prologue
+[0,"dawn",{map:0},50,"Two thousand years ago, the Tamil country was a green argument between rivers and hills. Poets called it Tamilakam, and they sang about it as no other people sang about their land."],
+[0,"day",{peak:0,huts:6},55,"Among its rulers, three crowns stood above all: the Chera of the western ghats, the Chola of the Kaveri delta, and the Pandya of the southern sea. The Tamils called them Moovendar, the Three Great Kings."],
+[0,"gold",{peak:1,huts:4},60,"And yet the Sangam poets did not reserve their finest verses for emperors. They kept them for a chieftain with no crown of that kind, who ruled a mountain, and who was remembered for what he gave away."],
+// ---- I Parambu Nadu
+[1,"dawn",{peak:1,mist:.7},55,"This is Parambu, a country of three hundred villages folded inside a ring of forested hills. Springs rise from its slopes. Honey hangs in the cliffs. Jackfruit, millet and wild pepper grow without anyone planting them."],
+[1,"day",{peak:1,huts:9},60,"Its people were of the hills, farmers, foragers, hunters, and keepers of the forest's long memory. They answered to a chieftain of the Velir line, whose title was not a throne but a promise: no one in Parambu goes hungry."],
+[1,"day",{peak:1,huts:9,parrots:1},50,"For the world outside, Parambu's wealth was its mystery. Its hills were a fortress by nature. Its forests could swallow an army the way a river swallows a stone."],
+[1,"gold",{peak:1,huts:7},55,"The chieftain's name was Pari. The poems call him Vel Pari, and the hill folk simply called him Pari, the way one speaks of a brother who also happens to hold the keys to the granary."],
+[1,"dusk",{peak:1,huts:9,fire:.3},60,"Every evening, the villages of Parambu lit their hearths in turn, one valley after another, so that from the summit the whole country glowed like a lamp being passed from hand to hand."],
+[1,"night",{peak:1,huts:9,fire:.3},50,"The older storytellers said: a land is not defended by its walls but by how much its people would lose if it fell. Parambu had nothing to hide and everything to protect."],
+// ---- II Poet and Chieftain
+[2,"dawn",{peak:1},55,"Then, as the poems tell it, a Brahmin poet named Kapilar came to the mountain. He had walked through the courts of kings, and left every one of them unsatisfied. He expected the same from this hill."],
+[2,"day",{peak:1,huts:6},55,"Pari did not receive him with ceremony. He walked him through the forest, named the birds, let him taste the honey from the cliff. The poet realised he was being given something no court had offered him: attention."],
+[2,"gold",{peak:1},60,"They became inseparable. The chieftain, who could shape a village's future in an afternoon, and the poet, who could shape its memory for ever. Each understood what the other was for.","Kapilar, in the Purananuru: the hills belong to Pari — and Pari belongs to those who ask. (paraphrase)"],
+[2,"night",{peak:1,stars:1},50,"On clear nights they climbed to the highest rock. Kapilar recited. Pari listened without answering. When the poet finished, the chieftain would often say only: again."],
+[2,"dusk",{peak:1,huts:5},55,"Tradition remembers Pari as a leader of astonishing generosity, a man who would sooner empty a granary than turn away a stranger. Some said it was a weakness. Kapilar said it was the only kind of power that deserved to be sung."],
+[2,"dawn",{peak:1,huts:5},45,"It is this friendship, between the one who rules and the one who remembers, that the whole epic stands on. Without Kapilar, we would not know Pari. Without Pari, there would be no reason to write him down."],
+// ---- III Jasmine and Chariot
+[3,"day",{peak:1,creeper:1},55,"One morning, as the story goes, Pari was riding his chariot through the forest road. Along the path, a jasmine creeper had no tree to climb. It trembled in the wind, reaching for something that was not there."],
+[3,"day",{peak:1,creeper:1,chariot:1},55,"Pari stopped the chariot. He did not think of his schedule, or his rank, or what others would say. He thought only: this small living thing is reaching, and I have something it can climb."],
+[3,"gold",{peak:1,creeper:1,chariot:1},55,"He left his chariot standing in the forest, and walked home. The creeper wound itself around the wheels and the frame, and in time it flowered white across the whole wooden body."],
+[3,"dusk",{peak:1,creeper:1,chariot:1},50,"Kings who heard the story laughed. A chief who surrenders his chariot to a vine! Poets heard it and wept. They have been retelling it ever since, because it explains Pari more completely than any list of his victories.","Mullaikku therkodutha Pari — Pari, who gave his chariot to the jasmine."],
+[3,"night",{peak:1,creeper:1,chariot:1,stars:1},50,"Yet an act like that also carries a warning. A man who will give his own chariot to a creeper has made himself hard to bribe, hard to frighten and impossible to buy. Such men are loved by their people. They are feared by crowns."],
+// ---- IV Three Crowns
+[4,"day",{map:1},60,"Look now at the larger map. The Chera, Chola and Pandya kingdoms had been rivals for generations. But three rivals, left alone, will eventually discover one thing they agree on: a fourth power that does not need them."],
+[4,"gold",{map:1},55,"Parambu stood at the meeting point of their territories. Its hills controlled trade routes and its forests held timber, spices and pearls of the highland. It owed tribute to no one."],
+[4,"dusk",{map:1},55,"In the courts of the three kings, the same sentence began to be spoken: how can a chieftain with no crown refuse the shadow of the three crowns? And how long can we allow it?"],
+[4,"night",{map:1,drums:1},50,"Court poets sang Pari as a thief of glory. Spies described the hill's passes. Treasurers estimated the wealth of three hundred villages. Nobody mentioned the word conquest yet. They only used the word alliance."],
+[4,"storm",{map:1,drums:1},55,"It was then, say the poems, that the three kings did something they had never done in the history of Tamilakam. They set their quarrels aside, and made a single pact against a single hill."],
+[4,"fire",{map:1,drums:1},50,"This is the moment the epic calls the turning of the age. An era of balance between crowns ended, and an era of one against all began. And at its centre was a man who simply wanted to be left to feed his people."],
+// ---- V Ultimatum
+[5,"day",{peak:1,huts:8},50,"The envoys came to Parambu bearing silk and promises. Pari received them in the open air, the way he received every guest, and offered food before asking their business."],
+[5,"gold",{peak:1,huts:8},55,"The message was courteous in the way that a closing fist is courteous. Accept the overlordship of the three crowns. Pay tribute. Open the passes. In return, Parambu would keep its name."],
+[5,"dusk",{peak:1,huts:8},55,"Pari listened to the end. Then he said, as the story remembers it, that his people had never owed a stranger anything, and that a gift taken from them could not be called a gift."],
+[5,"night",{peak:1,huts:8,fire:.3},50,"The envoys left before dawn. The villagers watched them go from every ridge. Nobody spoke. They all knew what an unanswered refusal becomes."],
+[5,"storm",{peak:1,drums:1},50,"Far below the hill, three banners were already being raised. Crimson for the Chera, tiger-gold for the Chola, and the twin fish of the Pandya, riding together under the monsoon clouds."],
+// ---- VI Council
+[6,"night",{peak:1,fire:.5,stars:1},55,"That night, Pari called the council of the hills. Elders, hunters, healers, the keepers of springs. He told them plainly: he would not ask any man to die for his sake. He asked only whether they wished to remain free."],
+[6,"night",{peak:1,fire:.5},55,"No one answered at first. Then an old forager said, we are the people of the mountain; we have always known which paths are ours. Hearts that were afraid settled like water finding its level."],
+[6,"dawn",{peak:1,huts:9},50,"The strategy that followed owed nothing to the way kings fought. There would be no open field, no charge. Parambu would use what it always had: its terrain, its forests, its knowledge of every trail and spring."],
+[6,"day",{peak:1,huts:9,parrots:1},55,"Archers took the high cliffs. Trackers were sent to mark the passes with false trails. Healers stored herbs. Granaries were counted and sealed. Even children learned which streams were safe to drink from."],
+[6,"gold",{peak:1,huts:9},50,"Kapilar walked among the villages, listening. Pari, he realised, was not preparing for a war. He was preparing for a very long refusal. And the poet understood that refusal was the harder weapon."],
+[6,"dusk",{peak:1,huts:9,fire:.4},50,"On the last evening before the armies arrived, Pari climbed the summit alone and stood for an hour in silence. Whatever he said to the mountain, the mountain has kept."],
+// ---- VII Siege
+[7,"dawn",{peak:1,army:1,mist:.8},55,"They came at dawn. Three armies in three colours, flowing up the valleys like floodwater. Thousands of spearmen, war elephants, horses, siege engines hauled over the roads cut through foreign forest."],
+[7,"day",{peak:1,army:1},55,"The first assaults broke in the forests. Paths that had looked clear led into ravines. Springs that had looked safe were bitter. Whole companies lost themselves within a morning's march."],
+[7,"storm",{peak:1,army:1,drums:1},55,"The rain, too, took Parambu's side. Rivers rose behind the armies. Supply carts sank to their axles. Commanders from three crowns argued about whose fault it was, and for the first time their alliance showed a crack."],
+[7,"fire",{peak:1,army:1,drums:1},55,"The kings answered with fire. They burned the lower forests, and smoke rolled up the slopes like a curtain. Villages near the foothills were evacuated by night, every household carrying its seed grain on its back."],
+[7,"night",{peak:1,army:1,fire:.7,drums:1},55,"Pari himself was everywhere. On the cliff ledges with the archers. In the villages with the wounded. At the springs, where children handed up water. He slept, the poems say, only when the others slept."],
+[7,"dawn",{peak:1,army:1},50,"Weeks became months. The armies of the three crowns had expected a siege of days. Instead they found themselves the besieged, trapped between a hostile forest and their own rising hunger."],
+// ---- VIII Parrots
+[8,"day",{peak:1,army:1,parrots:1},55,"Inside the hill, the true battle was about food. Granaries had been filled for hard years. But the siege lasted longer than anyone's calculation, and numbers on a clay tablet do not feed a village."],
+[8,"day",{peak:1,parrots:1},60,"Here the legends give Kapilar his moment. The poet, who had spent years among birds, trained flocks of parrots to fly out to the millet fields below the siege lines and return with ears of grain in their beaks. (Tradition.)"],
+[8,"gold",{peak:1,parrots:1},55,"Whether or not it happened exactly so, the tale carries a truth: that a hill which can be fed by birds and poets is not a hill that armies can starve. Defiance, in the old stories, is always a kind of imagination."],
+[8,"dusk",{peak:1,army:1,fire:.3},55,"The kings, meanwhile, watched their stores shrink. Rumours reached their camps about a mountain that fed itself. Soldiers whispered that Parambu was protected by something older than weapons."],
+[8,"night",{peak:1,army:1,stars:1},50,"The three kings met at last in a single tent. They could not win by force. They could not retreat without surrendering their pact. And so they began to speak, quietly, of another kind of war."],
+[8,"fire",{peak:1,army:1,drums:1},50,"What the sword could not take, they decided, deception might. The thing that made Pari invincible in the forest, the poems suggest, also made him vulnerable at his own door: a man who cannot refuse a guest."],
+// ---- IX Fall
+[9,"dawn",{peak:1,huts:6},55,"The tradition does not describe the final days as a battle. It describes them as a visit. Strangers came to the foot of the hill in the guise of wandering minstrels, singing songs of Pari's fame."],
+[9,"day",{peak:1,huts:6},55,"According to the legend, the singers asked to meet the chieftain whose generosity every bard knew. And Pari, who had never turned away a singer, came down to meet them. (Tradition.)"],
+[9,"gold",{peak:1,huts:6},55,"Some versions tell that the guests were the three kings themselves, in disguise. Others tell it differently. All of them end the same way: Pari fell, not on the field of war, but at the threshold of hospitality."],
+[9,"dusk",{peak:1,fire:.6},55,"When the news climbed the mountain, the silence was larger than any cry. The hill that had resisted months of siege seemed to bow. Torches were lit in every village, one after the other, as on the best evenings."],
+[9,"night",{peak:1,fire:.8,stars:1},55,"The kings entered Parambu in the dark. They found no treasure. They found granaries open, fields tended, a people who had already decided what they would carry forward. The conquest was complete, and strangely empty."],
+[9,"storm",{peak:1,fire:.5},50,"It is the oldest irony in the story: they had taken the mountain, but the man who made it a country was already beyond their reach. You can seize land. You cannot seize what land was for."],
+[9,"night",{peak:1,fire:.9},50,"On the funeral hill, the poet stood apart. Those near him said afterwards that Kapilar did not weep. He took out his palm-leaf, and began, quite quietly, to compose."],
+// ---- X Vow
+[10,"dawn",{peak:1,fire:.2},55,"Pari left two daughters, Angavai and Sangavai, who were nearly of age. Kapilar had promised their father he would see them safely married. A poet's vow, in that country, was heavier than a king's."],
+[10,"day",{peak:0,huts:3},55,"He took them from the ruined hill and travelled from court to court, seeking a husband worthy of Pari's blood. He found how quickly men look away when the family of a defeated chieftain stands at the door."],
+[10,"dusk",{peak:0},55,"In the end the poet found a ruler of honour, Malaiyaman, who accepted the daughters in marriage for love of the fallen hill. The vow was kept, as promised. But Kapilar's work was not over."],
+[10,"night",{peak:1,stars:1},55,"Before that, the daughters had stood on a hillside under the moon and sung words the Purananuru still preserves. Paraphrased: last month, under this white moon, we had a father and no one could touch our hill. This month, under the same moon, kings have taken it.","அற்றைத் திங்கள் அவ்வெண் நிலவில்… — Purananuru 112 (paraphrase)"],
+[10,"dawn",{peak:1},50,"Kapilar then returned to the poems. He sang of Pari to every audience, every court, every road. He made certain that a name the kings had tried to end would instead become a standard of what a ruler could be."],
+[10,"dusk",{peak:1,huts:3},55,"Tradition says he lived out his last days on a rock-hill, and fasted there in the old Tamil way, refusing food until he died. He had carried one man's memory further than any army carried a flag."],
+[10,"night",{peak:1,stars:1},50,"And so the friendship ended as it began, on a hill beneath the stars: one man remembered, one man remembering. The kings had taken the land. The poet had taken the story."],
+// ---- Epilogue
+[11,"dawn",{peak:1,huts:9,mist:.6},55,"What became of Pari's kingdom? The crowns held the hills for a time, and then lost interest. Villages continued. Springs continued. Parambu, mostly, forgot to be conquered."],
+[11,"day",{peak:1,huts:9,parrots:1},55,"But the larger kingdom, the one made of habit and memory, never ended. Whenever a Tamil household sets out food for a stranger before asking his name, Parambu is still standing."],
+[11,"gold",{peak:1,huts:9,creeper:1,chariot:1},55,"Look again at the chariot in the forest. Seasons turned. The jasmine thickened. The wood beneath softened and fell away. And the vine stood on its own, still in the shape of the thing that once supported it."],
+[11,"dusk",{peak:1,huts:9,creeper:1},50,"That is perhaps the truest answer to what survives of Vel Pari. Not a throne. Not a treasury. A shape held in the living, by those he once held up."],
+[11,"night",{peak:1,huts:9,stars:1,creeper:1},60,"Su. Venkatesan's modern epic returns the legend to a generation that has forgotten its own poems. It asks the question the Sangam poets asked: what do we owe to those who owe us nothing? And who, in our own time, is Pari?"]
+];
+
+/* normalise to exactly one hour */
+const TOTAL = 3600;
+const raw = B.reduce((a,b)=>a+b[3],0), K = TOTAL/raw;
+let acc = 0;
+const beats = B.map((b,i)=>{
+  const d = b[3]*K, o = {ch:b[0], pre:b[1], x:b[2], start:acc, dur:d, text:b[4], quote:b[5]||"", i};
+  acc += d; return o;
+});
+beats[beats.length-1].dur = TOTAL - beats[beats.length-1].start;
+const firstOfChapter = new Set(); CHAPTERS.forEach((_,ci)=>firstOfChapter.add(beats.find(b=>b.ch===ci).i));
+
+/* ============================ RENDERER ============================ */
+const PRE = {
+ dawn :{sky:["#18233f","#f0b27a"],sun:{x:.72,y:.60,c:"#ffe2b0"},hills:["#5a5877","#3e4663","#2a3550","#161e30"]},
+ day  :{sky:["#4a8cc0","#d7ecee"],sun:{x:.22,y:.22,c:"#fff8dc"},hills:["#86aaa4","#558f6e","#35704f","#1d4a37"]},
+ gold :{sky:["#35264e","#f4a65a"],sun:{x:.48,y:.68,c:"#ffd08c"},hills:["#76526a","#533a4f","#352a40","#1b1628"]},
+ dusk :{sky:["#160e30","#c9566a"],sun:{x:.82,y:.74,c:"#ff9c7c"},hills:["#5b3a5c","#3d2a4c","#271d38","#130f20"]},
+ night:{sky:["#04060d","#162240"],moon:{x:.76,y:.2},stars:1,hills:["#1e2b40","#15202f","#0e1724","#070c14"]},
+ storm:{sky:["#0b1017","#3b4655"],rain:1,hills:["#2d3a46","#222d38","#18212b","#0c1219"]},
+ fire :{sky:["#100505","#8a3010"],stars:.3,hills:["#4a2418","#35190f","#230f09","#120704"]}
+};
+const cv = document.getElementById("c"), cx = cv.getContext("2d");
+let W=0,H=0,DPR=1;
+function resize(){DPR=Math.min(2,devicePixelRatio||1);W=cv.width=innerWidth*DPR;H=cv.height=innerHeight*DPR}
+addEventListener("resize",resize);resize();
+
+function rnd(seed){let s=seed|0;return()=>{s=(s*1664525+1013904223)|0;return((s>>>0)%100000)/100000}}
+const STARS = Array.from({length:260},(_,i)=>{const r=rnd(i*7+3);return{x:r(),y:r()*.6,s:r()*1.6+.3,p:r()*6}});
+const HUTX = Array.from({length:12},(_,i)=>{const r=rnd(i*13+5);return{x:.08+i*.075+r()*.03,w:.012+r()*.01}});
+
+function ridge(layer, t, peak){
+  const pts=[], n=Math.ceil(W/10), base=.50+layer*.1;
+  for(let i=0;i<=n;i++){
+    const x=i/n, px=x+t*.0004*(layer+1);
+    let y=base+Math.sin(px*5+layer*2)*.03+Math.sin(px*12+layer)*.012+Math.sin(px*27+layer*3)*.005;
+    if(layer===1 && peak){ const d=(x-.5); y -= peak*.34*Math.exp(-d*d/.018)*(1+.08*Math.sin(x*60)) ; }
+    pts.push([x*W,y*H]);
+  }
+  return pts;
+}
+function fillRidge(pts,color){cx.beginPath();cx.moveTo(0,H);pts.forEach(p=>cx.lineTo(p[0],p[1]));cx.lineTo(W,H);cx.closePath();cx.fillStyle=color;cx.fill()}
+function glow(x,y,r,c,a){const g=cx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,c);g.addColorStop(1,"#0000");cx.globalAlpha=a;cx.fillStyle=g;cx.fillRect(x-r,y-r,2*r,2*r);cx.globalAlpha=1}
+
+function drawMap(t,bp,mode){
+  // stylised map: Chera west, Chola east, Pandya south, Parambu centre
+  const P={Chera:[.24,.45,"#c43a3a"],Chola:[.78,.40,"#e0a82a"],Pandya:[.52,.80,"#3aa6b5"],Parambu:[.50,.52,"#7ed08a"]};
+  cx.save();cx.globalAlpha=.9;
+  cx.strokeStyle="#ffffff22";cx.lineWidth=2*DPR;
+  cx.beginPath();cx.moveTo(.18*W,.18*H);cx.bezierCurveTo(.10*W,.5*H,.35*W,.9*H,.52*W,.95*H);cx.bezierCurveTo(.70*W,.85*H,.88*W,.6*H,.86*W,.25*H);cx.stroke();
+  const draw=(k,[x,y,c],r,pulse)=>{
+    const rr=r*DPR*(1+(pulse?.12*Math.sin(t*2):0));
+    glow(x*W,y*H,rr*2.2,c,.35);
+    cx.fillStyle=c;cx.beginPath();cx.arc(x*W,y*H,rr*.45,0,7);cx.fill();
+    cx.fillStyle="#f3e7cf";cx.font=`${14*DPR}px Georgia`;cx.textAlign="center";cx.fillText(k.toUpperCase(),x*W,y*H-rr*.7);
+  };
+  draw("Chera",P.Chera,46,0);draw("Chola",P.Chola,46,0);draw("Pandya",P.Pandya,46,0);draw("Parambu",P.Parambu,26,1);
+  if(mode===1){
+    const e=Math.min(1,bp*1.6);
+    cx.setLineDash([8*DPR,8*DPR]);cx.lineDashOffset=-t*20;cx.lineWidth=3*DPR;
+    for(const k of["Chera","Chola","Pandya"]){
+      const a=P[k],b=P.Parambu;cx.strokeStyle=a[2];cx.beginPath();cx.moveTo(a[0]*W,a[1]*H);
+      cx.lineTo((a[0]+(b[0]-a[0])*e)*W,(a[1]+(b[1]-a[1])*e)*H);cx.stroke();
+    }
+    cx.setLineDash([]);
+  }
+  cx.restore();
+}
+
+function drawCreeper(g,t,bp){
+  const gx=.5*W,gy=H*.72,n=60;cx.lineWidth=2*DPR;cx.strokeStyle="#4f8a4a";cx.beginPath();
+  for(let i=0;i<=n*Math.min(1,.4+bp);i++){
+    const u=i/n,x=gx-120*DPR+u*240*DPR+Math.sin(u*14+t*.6)*8*DPR,y=gy-u*140*DPR*(.6+.4*Math.sin(u*3))+Math.cos(u*14)*6*DPR;
+    i?cx.lineTo(x,y):cx.moveTo(x,y);
+  }cx.stroke();
+  const r=rnd(77);
+  for(let i=0;i<40*Math.min(1,bp+.3);i++){
+    const u=r(),x=gx-120*DPR+u*240*DPR+Math.sin(u*14+t*.6)*8*DPR,y=gy-u*140*DPR*(.6+.4*Math.sin(u*3))+Math.cos(u*14)*6*DPR;
+    glow(x,y,7*DPR,"#fffbe6",.9);
+  }
+}
+function drawChariot(t,bp){
+  const x=.5*W,y=H*.72,s=DPR;cx.save();cx.fillStyle="#1a120c";cx.strokeStyle="#2b1d12";cx.lineWidth=3*s;
+  cx.fillRect(x-70*s,y-70*s,140*s,30*s);cx.fillRect(x-60*s,y-110*s,6*s,40*s);cx.fillRect(x+54*s,y-110*s,6*s,40*s);
+  for(const dx of[-52,52]){cx.beginPath();cx.arc(x+dx*s,y-24*s,28*s,0,7);cx.stroke();for(let k=0;k<8;k++){const a=k*Math.PI/4;cx.beginPath();cx.moveTo(x+dx*s,y-24*s);cx.lineTo(x+dx*s+Math.cos(a)*28*s,y-24*s+Math.sin(a)*28*s);cx.stroke()}}
+  cx.restore();
+}
+function drawArmy(t,bp){
+  const cols=["#c43a3a","#e0a82a","#3aa6b5"];
+  for(let a=0;a<3;a++){
+    for(let k=0;k<46;k++){
+      const prog=Math.min(1,.25+bp*.6),r=rnd(a*100+k)();
+      const x=(.06+a*.06+(k%23)*.016)*W+Math.sin(t*.5+k)*3*DPR + (a===1?.34*W:a===2?.62*W:0)*(1-prog*.15);
+      const y=H*(.80+((k/23|0)*.045)+a*.01)-prog*H*.07*(1-r*.3);
+      cx.fillStyle=cols[a];cx.fillRect(x,y-14*DPR,2*DPR,14*DPR);
+      cx.fillStyle="#0a0a0a";cx.fillRect(x-3*DPR,y-18*DPR,8*DPR,5*DPR);
+    }
+    const bx=(.10+a*.34)*W;cx.fillStyle=cols[a];cx.fillRect(bx,H*.66,2*DPR,H*.2);
+    cx.beginPath();cx.moveTo(bx,H*.66);cx.lineTo(bx+34*DPR,H*.675+Math.sin(t*3+a)*3*DPR);cx.lineTo(bx,H*.70);cx.fill();
+  }
+}
+function drawParrots(t){
+  const r=rnd(5);
+  for(let i=0;i<14;i++){
+    const u=((t*.06+i/14)%1),x=u*W*1.2-.1*W,y=H*(.25+r()*.25)+Math.sin(u*9+i)*20*DPR,f=Math.sin(t*14+i*2)*6*DPR;
+    cx.fillStyle="#6fd05a";cx.beginPath();cx.moveTo(x,y);cx.lineTo(x-10*DPR,y-f);cx.lineTo(x-4*DPR,y+3*DPR);cx.lineTo(x-10*DPR,y+f);cx.closePath();cx.fill();
+    cx.fillStyle="#e03a3a";cx.fillRect(x+1*DPR,y-1*DPR,3*DPR,2*DPR);
+  }
+}
+function drawHuts(n,fire,t,col){
+  for(let i=0;i<Math.min(n,HUTX.length);i++){
+    const h=HUTX[i],x=h.x*W,y=H*(.78+(i%3)*.04),w=h.w*W*1.4;
+    cx.fillStyle="#0b0a0e";cx.beginPath();cx.moveTo(x-w,y);cx.lineTo(x,y-w*.9);cx.lineTo(x+w,y);cx.closePath();cx.fill();
+    if(col!=="day") {cx.fillStyle="#ffb65a";cx.globalAlpha=.7+.3*Math.sin(t*5+i);cx.fillRect(x-w*.15,y-w*.35,w*.3,w*.35);cx.globalAlpha=1;glow(x,y-w*.2,w*2.2,"#ff9a3a",.18)}
+  }
+}
+function drawFire(amt,t){
+  const r=rnd(31);for(let i=0;i<26;i++){
+    const x=r()*W,y=H*(.55+r()*.35),f=.6+.4*Math.sin(t*9+i*3);
+    glow(x,y,(40+r()*70)*DPR,"#ff7a2a",amt*f*.5);
+  }
+}
+function drawRain(t){
+  cx.strokeStyle="#9fb4c855";cx.lineWidth=1*DPR;cx.beginPath();
+  const r=rnd(9);for(let i=0;i<160;i++){const x=(r()*1.2*W+t*160*DPR)%(W*1.1),y=((r()*H)+t*900*DPR)%H;cx.moveTo(x,y);cx.lineTo(x-6*DPR,y+22*DPR)}cx.stroke();
+}
+
+function renderScene(b,t,bp){
+  const p=PRE[b.pre],x=b.x||{};
+  const g=cx.createLinearGradient(0,0,0,H*.75);g.addColorStop(0,p.sky[0]);g.addColorStop(1,p.sky[1]);cx.fillStyle=g;cx.fillRect(0,0,W,H);
+  if(p.stars||x.stars){cx.fillStyle="#fff";for(const s of STARS){cx.globalAlpha=(.4+.6*Math.sin(t*1.5+s.p))*(p.stars||.8)*(x.stars?1:.6);cx.fillRect(s.x*W,s.y*H,s.s*DPR,s.s*DPR)}cx.globalAlpha=1}
+  if(p.sun){glow(p.sun.x*W,p.sun.y*H-bp*H*.03,H*.5,p.sun.c,.6);cx.fillStyle=p.sun.c;cx.beginPath();cx.arc(p.sun.x*W,p.sun.y*H-bp*H*.03,H*.05,0,7);cx.fill()}
+  if(p.moon){glow(p.moon.x*W,p.moon.y*H,H*.35,"#cfe0ff",.35);cx.fillStyle="#f2f5ff";cx.beginPath();cx.arc(p.moon.x*W,p.moon.y*H,H*.045,0,7);cx.fill()}
+  if(x.map!==undefined){drawMap(t,bp,x.map);}
+  const peak = x.peak===undefined?.0:x.peak;
+  for(let l=0;l<4;l++){
+    fillRidge(ridge(l,t,l===1?peak:0),p.hills[l]);
+    if(l===1 && x.mist!==0){const m=x.mist??.4;glow(.5*W+Math.sin(t*.1)*40*DPR,H*.55,H*.55,"#ffffff",.12*m);}
+    if(l===2){ if(x.huts) drawHuts(x.huts,0,t,b.pre==="day"?"day":"night"); }
+  }
+  if(x.chariot) drawChariot(t,bp);
+  if(x.creeper) drawCreeper(null,t,bp);
+  if(x.army) drawArmy(t,bp);
+  if(x.parrots) drawParrots(t);
+  if(p.rain) drawRain(t);
+  if(x.fire) drawFire(x.fire,t);
+  if(b.pre==="fire") drawFire(.9,t);
+  // vignette
+  const v=cx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.9);v.addColorStop(0,"#0000");v.addColorStop(1,"#000b");cx.fillStyle=v;cx.fillRect(0,0,W,H);
+}
+
+/* ============================ AUDIO ============================ */
+let AC=null,master,droneG,musicOn=true,drumsOn=false,nextNote=0,nextDrum=0;
+const SCALE=[0,2,4,7,9]; // Mohanam-like pentatonic
+function initAudio(){
+  if(AC) return; AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain();master.gain.value=.5;master.connect(AC.destination);
+  const lp=AC.createBiquadFilter();lp.type="lowpass";lp.frequency.value=420;lp.connect(master);
+  droneG=AC.createGain();droneG.gain.value=.12;droneG.connect(lp);
+  [73.42,73.9,110.1].forEach(f=>{const o=AC.createOscillator();o.type="sawtooth";o.frequency.value=f;o.connect(droneG);o.start()});
+}
+function note(f,when,len,vol,type){
+  const o=AC.createOscillator(),g=AC.createGain();o.type=type||"triangle";o.frequency.value=f;
+  g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(vol,when+.02);g.gain.exponentialRampToValueAtTime(.0005,when+len);
+  o.connect(g);g.connect(master);o.start(when);o.stop(when+len+.05);
+}
+function audioTick(){
+  if(!AC||!musicOn||paused) return;
+  const n=AC.currentTime;
+  if(n>nextNote){const deg=SCALE[Math.random()*5|0],oct=[2,2,4,4,8][Math.random()*5|0];note(146.83*Math.pow(2,deg/12)*oct/2,n,2.8,.07);nextNote=n+1.6+Math.random()*2.4}
+  if(drumsOn && n>nextDrum){note(55,n,.35,.35,"sine");note(110,n+.01,.12,.1,"square");nextDrum=n+.9}
+}
+setInterval(audioTick,120);
+
+/* ============================ PLAYER ============================ */
+const $=id=>document.getElementById(id);
+let T=0,paused=false,speed=1,narr=true,lastBeat=-1,last=performance.now();
+const params=new URLSearchParams(location.search);
+function beatAt(t){for(let i=beats.length-1;i>=0;i--) if(t>=beats[i].start) return beats[i]; return beats[0]}
+const fmt=s=>{s=Math.max(0,s|0);return String(s/60|0).padStart(2,"0")+":"+String(s%60).padStart(2,"0")};
+
+CHAPTERS.forEach((c,i)=>{const o=document.createElement("option");o.value=beats.find(b=>b.ch===i).start;o.textContent=`${c[0]} — ${c[1]}`;$("chs").appendChild(o)});
+CHAPTERS.forEach((c,i)=>{const t=document.createElement("div");t.className="tick";t.style.left=(beats.find(b=>b.ch===i).start/TOTAL*100)+"%";$("prog").appendChild(t)});
+
+function speak(text){
+  if(!narr||speed>1||!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);u.rate=.88;u.pitch=.92;
+  const vs=speechSynthesis.getVoices();u.voice=vs.find(v=>/en-IN/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang))||null;
+  speechSynthesis.speak(u);
+}
+function setSub(b){
+  const s=$("sub");s.innerHTML="";const d=document.createElement("div");d.textContent=b.text;s.appendChild(d);
+  if(b.quote){const q=document.createElement("q");q.textContent=b.quote;s.appendChild(q)}
+}
+function frame(now){
+  const dt=(now-last)/1000;last=now;
+  if(!paused) T=Math.min(TOTAL,T+dt*speed);
+  const b=beatAt(T),bp=Math.min(1,(T-b.start)/b.dur);
+  if(b.i!==lastBeat){
+    lastBeat=b.i;setSub(b);drumsOn=!!(b.x&&b.x.drums);
+    $("chapter").textContent=`${CHAPTERS[b.ch][0]} · ${CHAPTERS[b.ch][1]}`;
+    $("chs").selectedIndex=b.ch;
+    if(!paused) speak(b.text); else if("speechSynthesis" in window) speechSynthesis.cancel();
+    if(firstOfChapter.has(b.i)){
+      const t=$("title");t.querySelector("h1").textContent=CHAPTERS[b.ch][2];t.querySelector("h2").textContent=(CHAPTERS[b.ch][0]+" — "+CHAPTERS[b.ch][1]).toUpperCase();t.style.opacity=1;
+      clearTimeout(frame.tt);frame.tt=setTimeout(()=>t.style.opacity=0,Math.min(6000,6000/Math.max(1,speed)));
+    }
+  }
+  // fade subtitle at start/end of beat
+  const age=T-b.start;$("sub").style.opacity=Math.min(1,age/1.2,(b.dur-age)/1.2);
+  renderScene(b,T,bp);
+  $("clock").textContent=`${fmt(T)} / ${fmt(TOTAL)}`;
+  $("prog").querySelector(".fill").style.width=(T/TOTAL*100)+"%";
+  if(T>=TOTAL){paused=true;$("play").textContent="Replay"}
+  requestAnimationFrame(frame);
+}
+function seek(t){T=Math.max(0,Math.min(TOTAL,t));lastBeat=-1;if("speechSynthesis" in window) speechSynthesis.cancel()}
+$("play").onclick=()=>{if(T>=TOTAL)seek(0);paused=!paused;$("play").textContent=paused?"Play":"Pause";if(paused){speechSynthesis&&speechSynthesis.pause()}else{speechSynthesis&&speechSynthesis.resume();AC&&AC.resume()}};
+$("back").onclick=()=>seek(T-30);$("fwd").onclick=()=>seek(T+30);
+$("chs").onchange=e=>seek(+e.target.value);
+$("spd").onchange=e=>{speed=+e.target.value;if(speed>1&&"speechSynthesis" in window)speechSynthesis.cancel()};
+$("nar").onclick=e=>{narr=!narr;e.target.classList.toggle("on",narr);if(!narr&&"speechSynthesis" in window)speechSynthesis.cancel()};
+$("snd").onclick=e=>{musicOn=!musicOn;e.target.classList.toggle("on",musicOn);if(master)master.gain.value=musicOn?.5:0};
+$("fs").onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+$("prog").onclick=e=>{const r=$("prog").getBoundingClientRect();seek((e.clientX-r.left)/r.width*TOTAL)};
+addEventListener("keydown",e=>{if(e.code==="Space"){e.preventDefault();$("play").click()}if(e.code==="ArrowRight")seek(T+30);if(e.code==="ArrowLeft")seek(T-30)});
+function begin(){$("start").style.display="none";initAudio();AC&&AC.resume();last=performance.now();requestAnimationFrame(frame)}
+$("go").onclick=begin;
+if(params.has("t")){T=+params.get("t");$("start").style.display="none";paused=params.has("paused");last=performance.now();requestAnimationFrame(frame)}
+</script>
+</body>
+</html>
