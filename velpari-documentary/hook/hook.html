@@ -93,9 +93,9 @@ function creeper(x,y,u,t){
   for(let i=0;i<=N;i++){const [px,py]=pt(i/n);i?cx.lineTo(px,py):cx.moveTo(px,py)}cx.stroke();
   cx.strokeStyle="#4f9a4c";cx.lineWidth=3;cx.stroke();
   const r=RNG(77);
-  for(let i=0;i<46;i++){const k=r()*u,[px,py]=pt(k),a=r()*6.28;cx.fillStyle=i%2?"#3f8641":"#2f6f35";cx.save();cx.translate(px,py);cx.rotate(a+Math.sin(t+i)*.12);cx.beginPath();cx.ellipse(10,0,13,6,0,0,7);cx.fill();cx.restore()}
+  for(let i=0;i<90;i++){const k=r()*u,[px,py]=pt(k),a=r()*6.28;cx.fillStyle=i%2?"#3f8641":"#2f6f35";cx.save();cx.translate(px,py);cx.rotate(a+Math.sin(t+i)*.12);cx.beginPath();cx.ellipse(10,0,13,6,0,0,7);cx.fill();cx.restore()}
   const r2=RNG(78);cx.globalCompositeOperation="lighter";
-  for(let i=0;i<34;i++){const k=r2()*u,[px,py]=pt(k);glow(px,py,22,"#fff6d8",.35);}
+  for(let i=0;i<34;i++){const k=r2()*u,[px,py]=pt(k);glow(px,py,14,"#fff6d8",.16);}
   cx.globalCompositeOperation="source-over";
   const r3=RNG(79);for(let i=0;i<34;i++){const k=r3()*u,[px,py]=pt(k);cx.fillStyle="#fffdf2";for(let j=0;j<5;j++){cx.save();cx.translate(px,py);cx.rotate(j*1.2566+t*.1);cx.beginPath();cx.ellipse(0,-6,3.6,7,0,0,7);cx.fill();cx.restore()}}
 }
@@ -116,115 +116,135 @@ function text(str,sub,t0,t1,tt,o={}){
   cx.restore();cx.letterSpacing="0px";
 }
 
+/* ---------- photo layer (painterly-filtered free-licence photos) ---------- */
+const IMG={},KEYS=["mist_tn","hills_a","lightning_a","lightning_c","jasmine_a","palm_leaf"];
+window.assetsReady=Promise.all(KEYS.map(k=>new Promise(res=>{const i=new Image();i.onload=()=>{IMG[k]=i;res()};i.onerror=()=>res();i.src="assets/styled/"+k+".jpg"})));
+function photo(key,o={}){
+  const im=IMG[key];if(!im)return(u,v)=>[u*W,v*H];
+  const sc=Math.max(W/im.width,H/im.height)*(o.z||1.15),dw=im.width*sc,dh=im.height*sc;
+  const x=(W-dw)/2+(o.px||0)*W,y=(H-dh)*(o.ay??.5)+(o.py||0)*H;
+  cx.save();cx.filter=o.filter||"none";cx.globalAlpha=o.alpha??1;cx.drawImage(im,x,y,dw,dh);cx.filter="none";cx.globalAlpha=1;
+  if(o.tint){const g=cx.createLinearGradient(0,0,0,H);g.addColorStop(0,o.tint[0]);g.addColorStop(.6,o.tint[1]);g.addColorStop(1,o.tint[2]||o.tint[1]);cx.globalCompositeOperation=o.mode||"soft-light";cx.globalAlpha=o.ta??1;cx.fillStyle=g;cx.fillRect(-600,-600,W+1200,H+1200)}
+  cx.restore();return(u,v)=>[x+u*dw,y+v*dh];
+}
+const GR={
+ dawn:{filter:"brightness(.92) saturate(2.0) sepia(.95) hue-rotate(-22deg) contrast(1.3)",tint:["#ff8a4a","#ffb870","#4a2218"],mode:"multiply",ta:.9},
+ gold:{filter:"brightness(.9) saturate(2.1) sepia(.95) hue-rotate(-24deg) contrast(1.3)",tint:["#7a3a8a","#ff9a40","#24100e"],mode:"multiply",ta:.92},
+ dusk:{filter:"brightness(.85) saturate(1.9) sepia(.7) hue-rotate(-34deg) contrast(1.25)",tint:["#4a1a50","#e8505f","#1a0b25"],mode:"multiply",ta:.9},
+ night:{filter:"brightness(.62) saturate(1.1) sepia(.5) hue-rotate(185deg) contrast(1.25)",tint:["#0a1430","#2a4070","#080c18"],mode:"multiply",ta:.95},
+ fire:{filter:"brightness(.7) saturate(2.0) sepia(.95) hue-rotate(-38deg) contrast(1.3)",tint:["#2a0a06","#d04a12","#1a0806"],mode:"multiply",ta:.9},
+ storm:{filter:"brightness(1.15) saturate(1.0) hue-rotate(-6deg) contrast(1.2)",tint:["#0a1a30","#3a5078"],mode:"multiply",ta:.85}
+};
+function hearths(map,t,seed=21,n=26,box=[.25,.75,.60,.74]){const r=RNG(seed);for(let i=0;i<n;i++){const [x,y]=map(box[0]+r()*(box[1]-box[0]),box[2]+r()*(box[3]-box[2]));glow(x,y,22,"#ffb056",.5+.35*Math.sin(t*4+i))}}
+
 /* ---------- shots ---------- */
-// every shot: (t = absolute, u = 0..1 within shot, l = local seconds)
 const CAM=(z0,z1,x0,x1,y0,y1)=>u=>{const e=ease(u);return{z:lerp(z0,z1,e),x:lerp(x0,x1,e),y:lerp(y0,y1,e)}};
 const SHOTS=[];
 function shot(a,b,cam,draw,over){SHOTS.push({a,b,cam,draw,over})}
+const BG=()=>{cx.fillStyle="#05060a";cx.fillRect(-700,-700,W+1400,H+1400)};
 
-// 1. Cold open: storm, torchlit armies
-shot(0,12,CAM(1,1.18,0,-30,0,-20),(t,u)=>{
-  sky("#05070c","#1a2230");rain(t,1,50);
-  ridge("#0d141c",H*.56,40,1,t*1,t,{x:W*.5,h:330,w:260});glow(W*.5,H*.46,380,"#ffb056",.10+.06*Math.sin(t*3));
-  { const r=RNG(41);for(let i=0;i<22;i++){glow(W*.5+(r()-.5)*420,H*.5+r()*120,16,"#ffb056",.7)} }
+// 1. Cold open: storm over the plains, armies below the mountain
+shot(0,12,CAM(1,1.15,0,-30,0,-20),(t,u)=>{
+  BG();photo("lightning_c",{z:1.3,ay:0,...GR.storm});
+  const f=flash(t,[1.5,4.0,4.4,8.0,10.5]);if(f>0)photo("lightning_a",{z:1.3,ay:.15,filter:"brightness(1.05) saturate(1.2)",alpha:Math.min(1,f*1.2)});
+  rain(t,1,50);
+  ridge("#0b1118",H*.56,40,1,t*1,t,{x:W*.5,h:330,w:260});glow(W*.5,H*.46,380,"#ffb056",.10+.06*Math.sin(t*3));
+  {const r=RNG(41);for(let i=0;i<22;i++)glow(W*.5+(r()-.5)*420,H*.5+r()*120,16,"#ffb056",.7)}
   ridge("#080d13",H*.72,50,2,t*6,t);
   torches(-100,W*.42,H*.62,H*.86,420,5,"#ff5a3a",t);torches(W*.58,W+100,H*.62,H*.86,420,6,"#4fd2e0",t);torches(W*.2,W*.8,H*.78,H*.95,500,7,"#ffb347",t);
   ridge("#030508",H*.9,36,3,t*10,t);
   for(let i=0;i<14;i++)banner(100+i*140,H*.93-(i%3)*10,200,["#c43a3a","#e0a82a","#2fa6b5"][i%3],t,i);
 },(t)=>{
-  const f=flash(t,[1.5,4.0,4.4,8.0,10.5]);if(f>0){cx.fillStyle=`rgba(210,225,255,${f*.55})`;cx.fillRect(0,0,W,H)}
-  text("மூன்று பேரரசுகள்","THREE EMPIRES",2.6,6.2,t,{y:H*.46,size:110});
-  text("ஒரே ஒரு மலை","ONE MOUNTAIN",7.2,11.4,t,{y:H*.46,size:130,col:"#ffd68a"});
+  const f=flash(t,[1.5,4.0,4.4,8.0,10.5]);if(f>0){cx.fillStyle=`rgba(210,225,255,${f*.35})`;cx.fillRect(0,0,W,H)}
+  text("மூன்று பேரரசுகள்","THREE EMPIRES",2.6,6.2,t,{y:H*.4,size:110});
+  text("ஒரே ஒரு மலை","ONE MOUNTAIN",7.2,11.4,t,{y:H*.4,size:130,col:"#ffd68a"});
 });
-// 2. Elephants march
+// 2. The march — warm war-dusk over hazy ranges
 shot(12,30,CAM(1.05,1.0,120,-120,0,0),(t,u)=>{
-  sky("#1a0a0c","#d9622e");glow(W*.7,H*.62,700,"#ffb066",.8);
-  ridge("#3a1612",H*.66,30,4,t*8,t);ridge("#1d0b09",H*.74,40,5,t*14,t);
-  torches(0,W,H*.64,H*.78,500,8,"#ffb347",t);
+  BG();photo("hills_a",{z:1.35,ay:.3,...GR.fire});glow(W*.7,H*.55,800,"#ff9a50",.6);
+  ridge("#2a100c",H*.70,30,4,t*8,t);ridge("#140807",H*.78,40,5,t*14,t);
+  torches(0,W,H*.66,H*.80,500,8,"#ffb347",t);
   const l=t-12;
-  for(let i=0;i<30;i++){man(((i*95+l*40)%(W+300))-150,H*.80+(i%4)*6,70+(i%3)*5,t,{spear:1,rim:"rgba(255,140,60,.6)",rimBlur:8,wind:.4})}
-  elephant(((l*65)%(W+800))-400,H*.88,.75,t,0,"#c43a3a");
-  elephant(((l*55+700)%(W+800))-400,H*.92,.95,t,2,"#e0a82a");
-  elephant(((l*70+1300)%(W+800))-400,H*.97,1.15,t,4,"#2fa6b5");
-  embers(t,70,"#ffb347",120,7);
-},(t)=>{text("வெல்லாத நாடே இல்லை","NO KINGDOM HAD EVER STOOD AGAINST THEM",16,25,t,{y:H*.4,size:92,subSize:34})});
-// 3. Parambu reveal
-shot(30,45,CAM(1.35,1.0,0,0,160,-30),(t,u)=>{
-  sky("#17213f","#f2a766");glow(W*.5,H*.58,900,"#ffd9a0",.7);
-  ridge("#5d5b7a",H*.60,36,6,t*2,t);ridge("#434b6b",H*.66,40,7,t*4,t,{x:W*.5,h:300,w:240});ridge("#2a3550",H*.74,38,8,t*7,t);ridge("#141c2e",H*.84,34,9,t*10,t);
-  const r=RNG(21);for(let i=0;i<46;i++){const x=r()*W,y=H*(.70+r()*.2);glow(x,y,26,"#ffb056",.55+.3*Math.sin(t*4+i))}
-  mist(t,H*.66,.16);
-},(t)=>{text("பறம்பு நாடு","300 VILLAGES  ·  NO WALLS  ·  NO CROWN",33,43,t,{y:H*.36,size:110,subSize:32})});
+  for(let i=0;i<30;i++)man(((i*95+l*40)%(W+300))-150,H*.82+(i%4)*6,70+(i%3)*5,t,{spear:1,rim:"rgba(255,140,60,.6)",rimBlur:8,wind:.4});
+  elephant(((l*65)%(W+800))-400,H*.90,.75,t,0,"#c43a3a");elephant(((l*55+700)%(W+800))-400,H*.94,.95,t,2,"#e0a82a");elephant(((l*70+1300)%(W+800))-400,H*.99,1.15,t,4,"#2fa6b5");
+  embers(t,80,"#ffb347",120,7);
+},(t)=>{text("வெல்லாத நாடே இல்லை","NO KINGDOM HAD EVER STOOD AGAINST THEM",16,25,t,{y:H*.36,size:92,subSize:34})});
+// 3. Parambu reveal — misty hills at dawn, village hearths
+shot(30,45,CAM(1.0,1.12,0,0,60,-30),(t,u)=>{
+  BG();const m=photo("mist_tn",{z:1.3,ay:.45,...GR.dawn});
+  glow(W*.55,H*.42,900,"#ffd9a0",.45);hearths(m,t,21,34,[.1,.9,.62,.9]);mist(t,H*.62,.16,"#fff1d8");embers(t,30,"#ffe3a0",20,3);
+},(t)=>{text("பறம்பு நாடு","300 VILLAGES  ·  NO WALLS  ·  NO CROWN",33,43,t,{y:H*.2,size:110,subSize:32})});
 // 4. Pari on the peak
-shot(45,70,CAM(1.0,1.75,0,0,0,110),(t,u)=>{
-  sky("#241a3e","#ffc27a");glow(W*.5,H*.50,800,"#ffe2a8",.95);cx.fillStyle="#fff1cf";cx.beginPath();cx.arc(W*.5,H*.50,60,0,7);cx.fill();
-  ridge("#6a4a5a",H*.58,30,3,t*1,t);ridge("#3b2c46",H*.68,36,2,t*3,t,{x:W*.5,h:300,w:300});ridge("#150f1d",H*.9,30,5,t*8,t);
-  man(W*.5-20,H*.68-296,150,t,{spear:1,wind:1.25,rim:"rgba(255,230,170,.9)",rimBlur:22});
-  const r=RNG(31);cx.strokeStyle="#0a0710";cx.lineWidth=2;for(let i=0;i<9;i++){const bx=((r()*W+t*(40+i*6))%W),by=H*(.2+r()*.2);cx.beginPath();cx.moveTo(bx-14,by);cx.quadraticCurveTo(bx,by-8+Math.sin(t*8+i)*5,bx+14,by);cx.stroke()}
-  mist(t,H*.72,.14,"#ffe6c0");
+shot(45,70,CAM(1.0,1.5,0,0,0,40),(t,u)=>{
+  BG();const m=photo("mist_tn",{z:1.35,ay:.4,py:.02,...GR.gold});
+  const [ax,ay]=m(.55,.385);glow(ax,ay-60,700,"#ffe2a8",.7+.15*Math.sin(t*.7));
+  man(ax,ay+6,120,t,{spear:1,wind:1.3,rim:"rgba(255,230,170,.95)",rimBlur:24});
+  const r=RNG(31);cx.strokeStyle="#0a0710";cx.lineWidth=2;for(let i=0;i<9;i++){const bx=((r()*W+t*(40+i*6))%W),by=H*(.12+r()*.2);cx.beginPath();cx.moveTo(bx-14,by);cx.quadraticCurveTo(bx,by-8+Math.sin(t*8+i)*5,bx+14,by);cx.stroke()}
+  mist(t,H*.7,.14,"#ffe6c0");embers(t,30,"#ffe3a0",25,9);
 },(t)=>{text("வேள் பாரி","THE CHIEFTAIN WHO ANSWERED TO NO CROWN",50,66,t,{y:H*.80,size:150,col:"#fff1cf",subSize:34})});
-// 5. Jasmine and chariot
-shot(70,95,CAM(1.0,1.22,-60,40,0,-30),(t,u)=>{
-  sky("#2b1f45","#ffb15e");glow(W*.25,H*.55,900,"#ffd08c",.8);
-  ridge("#6c4b5c",H*.60,28,2,t*2,t);ridge("#3b2b3f",H*.70,34,4,t*5,t);ridge("#1c1626",H*.82,30,6,t*8,t);
-  cx.fillStyle="#120d19";cx.fillRect(-600,H*.80,W+1200,H);
-  chariot(W*.5,H*.84,t);creeper(W*.5,H*.84,clamp((t-72)/14),t);petals(t,60);glow(W*.5,H*.62,500,"#fff4d0",.14*clamp((t-76)/10));
-},(t)=>{text("முல்லைக்குத் தேர் கொடுத்தவன்","THE MAN WHO GAVE HIS CHARIOT TO A JASMINE VINE",74,88,t,{y:H*.27,size:92,subSize:32})});
-// 6. Poet and chieftain
-shot(95,120,CAM(1.25,1.6,0,0,-120,-170),(t,u)=>{
-  sky("#02040a","#13203c");stars(t,1,360);
-  // shooting stars
+// 5. Chariot & jasmine, then the flower itself
+shot(70,95,CAM(1.0,1.15,-40,30,0,-20),(t,u)=>{
+  BG();
+  if(t<83.5){
+    photo("hills_a",{z:1.35,ay:.4,...GR.gold});glow(W*.28,H*.5,900,"#ffd08c",.6);
+    ridge("#1c1626",H*.84,30,6,t*8,t);cx.fillStyle="#120d19";cx.fillRect(-700,H*.82,W+1400,H);
+    chariot(W*.5,H*.86,t);creeper(W*.5,H*.86,clamp((t-71)/7),t);petals(t,60);
+  }else{
+    const k=(t-83.5)/11.5;photo("jasmine_a",{z:1.15+.22*k,px:-.02*k,filter:"brightness(1.1) saturate(1.35) sepia(.25)",tint:["#ffe0a0","#ffd08c","#3a2a10"],mode:"soft-light"});
+    const r=RNG(5);cx.globalCompositeOperation="lighter";for(let i=0;i<26;i++)glow(r()*W,r()*H,40+r()*90,"#ffe6b0",.1+.08*Math.sin(t+i));cx.globalCompositeOperation="source-over";petals(t,70,6);
+  }
+},(t)=>{text("முல்லைக்குத் தேர் கொடுத்தவன்","THE MAN WHO GAVE HIS CHARIOT TO A JASMINE VINE",74,88,t,{y:H*.2,size:92,subSize:32})});
+// 6. Poet & chieftain under the stars
+shot(95,120,CAM(1.2,1.5,0,0,-90,-150),(t,u)=>{
+  BG();photo("mist_tn",{z:1.5,ay:.3,...GR.night});stars(t,.9,320);
   for(const k of[100,108,115]){const d=t-k;if(d>0&&d<1.1){const x=W*.2+d*700+(k%7)*120,y=H*.1+d*260;cx.strokeStyle=`rgba(255,255,255,${1-d/1.1})`;cx.lineWidth=3;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x-130,y-48);cx.stroke()}}
   glow(W*.78,H*.2,420,"#cfe0ff",.4);cx.fillStyle="#f4f7ff";cx.beginPath();cx.arc(W*.78,H*.2,50,0,7);cx.fill();
-  ridge("#17233a",H*.66,26,3,t*1,t);ridge("#0b1322",H*.76,30,5,t*3,t);
-  cx.fillStyle="#04060b";cx.beginPath();cx.moveTo(W*.25,H*.82);cx.quadraticCurveTo(W*.45,H*.62,W*.75,H*.82);cx.closePath();cx.fill();ridge("#04060b",H*.9,20,2,t*4,t);
-  man(W*.45,H*.745,190,t,{sit:1,rim:"rgba(170,200,255,.9)",rimBlur:22});man(W*.55,H*.745,180,t,{sit:1,flip:1,rim:"rgba(170,200,255,.9)",rimBlur:22});
-  embers(t,60,"#ffe9a8",30,12,[W*.2,W*.8,H*.5,H]);
-},(t)=>{text("ஒரு கவிஞன்.  ஒரு தலைவன்.","A POET.  A CHIEFTAIN.  ONE UNBREAKABLE BOND.",99,114,t,{y:H*.22,size:96,subSize:32})});
+  cx.fillStyle="#04060b";cx.beginPath();cx.moveTo(W*.2,H*.86);cx.quadraticCurveTo(W*.45,H*.62,W*.8,H*.86);cx.closePath();cx.fill();ridge("#04060b",H*.93,20,2,t*4,t);
+  man(W*.45,H*.752,190,t,{sit:1,rim:"rgba(170,200,255,.9)",rimBlur:22});man(W*.55,H*.752,180,t,{sit:1,flip:1,rim:"rgba(170,200,255,.9)",rimBlur:22});
+  embers(t,40,"#ffe9a8",30,12,[W*.2,W*.8,H*.5,H]);
+},(t)=>{text("ஒரு கவிஞன்.  ஒரு தலைவன்.","A POET.  A CHIEFTAIN.  ONE UNBREAKABLE BOND.",99,114,t,{y:H*.2,size:96,subSize:32})});
 // 7. Ultimatum
 shot(120,140,CAM(1.0,1.15,-60,40,0,0),(t,u)=>{
-  sky("#1a0b25","#d0475a");glow(W*.85,H*.7,800,"#ff8a70",.8);
-  ridge("#4a2548",H*.64,30,2,t*2,t);ridge("#2a1630",H*.76,34,4,t*4,t);ridge("#120914",H*.86,26,6,t*7,t);
+  BG();photo("mist_tn",{z:1.4,ay:.4,...GR.dusk});glow(W*.85,H*.66,800,"#ff8a70",.6);
+  ridge("#120914",H*.88,26,6,t*7,t);cx.fillStyle="#0a050c";cx.fillRect(-700,H*.9,W+1400,H);
   const l=t-120;
-  for(let i=0;i<3;i++){const x=-80+i*60+ease(clamp(l/6))*(480+i*40);banner(x,H*.86,330-i*20,["#c43a3a","#e0a82a","#2fa6b5"][i],t,i);for(let k=0;k<5;k++)man(x-60+k*26,H*.88+k%2*6,100,t,{spear:1,rim:"rgba(255,120,100,.6)",flip:0})}
-  man(W*.78,H*.88,190,t,{flip:1,spear:1,wind:1.2,rim:"rgba(255,180,140,.9)",rimBlur:20});
-  embers(t,40,"#ff8a60",60,5);
-},(t)=>{text("பணிய மாட்டேன்.","“I WILL NOT BOW.”",124,136,t,{y:H*.3,size:140,col:"#ffd0b8",subSize:44})});
-// 8. Siege montage — four rapid cuts
+  for(let i=0;i<3;i++){const x=-80+i*60+ease(clamp(l/6))*(480+i*40);banner(x,H*.9,330-i*20,["#c43a3a","#e0a82a","#2fa6b5"][i],t,i);for(let k=0;k<5;k++)man(x-60+k*26,H*.92+k%2*6,100,t,{spear:1,rim:"rgba(255,120,100,.6)"})}
+  man(W*.78,H*.92,190,t,{flip:1,spear:1,wind:1.2,rim:"rgba(255,180,140,.9)",rimBlur:20});embers(t,40,"#ff8a60",60,5);
+},(t)=>{text("பணிய மாட்டேன்.","“I WILL NOT BOW.”",124,136,t,{y:H*.28,size:140,col:"#ffd0b8",subSize:44})});
+// 8. The siege — four rapid cuts
 const SIEGE=[
- (t,l)=>{sky("#100505","#8a3010");glow(W*.5,H*.7,1000,"#ff6a20",.8);ridge("#3a160c",H*.6,40,2,t*3,t,{x:W*.5,h:240,w:260});ridge("#180804",H*.8,40,4,t*6,t);torches(0,W,H*.55,H*.9,500,2,"#ff8a2a",t);embers(t,160,"#ff9a3a",160,9);mist(t,H*.7,.2,"#ff7a40")},
- (t,l)=>{sky("#0a0f16","#37424f");rain(t,1.4,70);ridge("#222c38",H*.62,36,3,t*2,t,{x:W*.5,h:260,w:280});ridge("#0e141c",H*.8,34,5,t*5,t);
+ (t,l)=>{BG();const m=photo("mist_tn",{z:1.35,ay:.4,...GR.fire});glow(W*.5,H*.62,1000,"#ff6a20",.7);hearths(m,t,3,60,[.1,.9,.55,.95]);torches(0,W,H*.6,H*.95,600,2,"#ff8a2a",t);embers(t,180,"#ff9a3a",170,9);mist(t,H*.7,.22,"#ff7a40")},
+ (t,l)=>{BG();photo("lightning_a",{z:1.3,ay:.3,filter:"brightness(.8) saturate(1.1)"});rain(t,1.4,70);cx.fillStyle="rgba(2,4,8,.55)";cx.fillRect(-700,H*.72,W+1400,H);
    for(let i=0;i<4;i++)elephant(-300+((l*160+i*520)%(W+900)),H*.95+(i%2)*18,.9+i*.08,t,i,["#c43a3a","#e0a82a","#2fa6b5","#c43a3a"][i])},
- (t,l)=>{sky("#1b0d14","#b8462e");glow(W*.2,H*.4,700,"#ff9a5a",.6);ridge("#2e1319",H*.7,40,4,t*3,t);
+ (t,l)=>{BG();photo("hills_a",{z:1.4,ay:.4,...GR.fire});glow(W*.2,H*.4,700,"#ff9a5a",.6);
    cx.fillStyle="#08040a";cx.beginPath();cx.moveTo(-100,H*.7);cx.lineTo(W*.6,H*.52);cx.lineTo(W+100,H*.9);cx.lineTo(W+100,H+100);cx.lineTo(-100,H+100);cx.closePath();cx.fill();
-   for(let i=0;i<7;i++)man(W*.2+i*110,H*(.72-i*.026),120,t,{bow:1,rim:"rgba(255,160,90,.7)",flip:0});
+   for(let i=0;i<7;i++)man(W*.2+i*110,H*(.72-i*.026),120,t,{bow:1,rim:"rgba(255,160,90,.7)"});
    const r=RNG(3);cx.strokeStyle="rgba(255,230,180,.8)";cx.lineWidth=2.5;for(let i=0;i<24;i++){const p=((l*1.3+r())%1),x=W*.15+i*60+p*900,y=H*.55+p*250-Math.sin(p*3.14)*260;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x-26,y+10-p*16);cx.stroke()}
    embers(t,60,"#ff9a3a",90,14)},
- (t,l)=>{sky("#0b0707","#5a1f10");glow(W*.5,H*.6,1100,"#ff5a1a",.7);ridge("#2a0f08",H*.58,30,6,t*2,t,{x:W*.5,h:300,w:230});torches(0,W,H*.5,H*.95,800,13,"#ff6a2a",t);embers(t,220,"#ffb347",200,15);
-   man(W*.5,H*.58-230,120,t,{spear:1,wind:1.3,rim:"rgba(255,160,70,1)",rimBlur:24})}
+ (t,l)=>{BG();const m=photo("mist_tn",{z:1.35,ay:.4,...GR.fire});const [ax,ay]=m(.55,.385);glow(ax,ay,900,"#ff5a1a",.6);torches(0,W,H*.5,H*.95,800,13,"#ff6a2a",t);embers(t,240,"#ffb347",200,15);
+   man(ax,ay+6,120,t,{spear:1,wind:1.3,rim:"rgba(255,160,70,1)",rimBlur:24})}
 ];
 shot(140,160,CAM(1.0,1.08,0,0,0,0),(t,u)=>{const idx=Math.min(3,Math.floor((t-140)/5)),l=(t-140)%5;cx.save();const z=1+l*.02;cx.translate(W/2,H/2);cx.scale(z,z);cx.translate(-W/2,-H/2);SIEGE[idx](t,l);cx.restore()},(t)=>{
   const f=flash(t,[148.2,152.6,156.1]);if(f>0){cx.fillStyle=`rgba(255,235,210,${f*.5})`;cx.fillRect(0,0,W,H)}
   text("முற்றுகை","THE SIEGE",141.5,146.5,t,{y:H*.45,size:150,col:"#ffd9b0"});
   text("மாதங்கள்… நாட்கள் அல்ல.","MONTHS. NOT DAYS.",151,158.5,t,{y:H*.4,size:92,col:"#ffe6c8",subSize:34});
 });
-// 9. Hush — single jasmine
-shot(160,170,CAM(1,1.25,0,0,0,0),(t,u)=>{
-  cx.fillStyle="#020204";cx.fillRect(-600,-600,W+1200,H+1200);const a=clamp((t-160)/2);
-  glow(W/2,H*.52,520,"#fff4d0",.35*a);cx.save();cx.translate(W/2,H*.52);cx.rotate(Math.sin(t*.6)*.08);
-  cx.fillStyle="#fffbe8";cx.shadowColor="#fff4d0";cx.shadowBlur=40*a;cx.globalAlpha=a;
-  for(let k=0;k<5;k++){cx.rotate(Math.PI*2/5);cx.beginPath();cx.ellipse(0,-46,22,48,0,0,7);cx.fill()}cx.restore();cx.globalAlpha=1;
-  petals(t,24,8)},(t)=>{text("படையால் முடியாததை…","WHAT AN ARMY COULD NOT DO…",162,169.6,t,{y:H*.82,size:84,subSize:32})});
-// 10. Title card
+// 9. Hush — the jasmine, alone
+shot(160,170,CAM(1,1.18,0,0,0,0),(t,u)=>{
+  BG();const a=clamp((t-160)/2.5);photo("jasmine_a",{z:1.5,px:.1,py:-.05,alpha:a,filter:"brightness(.38) saturate(1.1)"});
+  const g=cx.createRadialGradient(W/2,H*.5,60,W/2,H*.5,H*.75);g.addColorStop(0,"rgba(0,0,0,0)");g.addColorStop(1,"rgba(0,0,0,.92)");cx.fillStyle=g;cx.fillRect(-700,-700,W+1400,H+1400);
+  glow(W*.42,H*.46,420,"#fff4d0",.3*a);petals(t,22,8)},(t)=>{text("படையால் முடியாததை…","WHAT AN ARMY COULD NOT DO…",162,169.6,t,{y:H*.82,size:84,subSize:32})});
+// 10. Title — on a palm-leaf manuscript
 shot(170,180,CAM(1.12,1.0,0,0,0,0),(t,u)=>{
-  cx.fillStyle="#030305";cx.fillRect(-600,-600,W+1200,H+1200);const a=clamp((t-170)/1.2);
-  cx.globalCompositeOperation="lighter";for(let i=0;i<14;i++){cx.save();cx.translate(W/2,H*.46);cx.rotate(i*Math.PI/7+t*.03);const g=cx.createLinearGradient(0,0,900,0);g.addColorStop(0,"rgba(255,200,110,.18)");g.addColorStop(1,"rgba(255,200,110,0)");cx.fillStyle=g;cx.globalAlpha=a;cx.beginPath();cx.moveTo(0,-14);cx.lineTo(900,-60);cx.lineTo(900,60);cx.lineTo(0,14);cx.fill();cx.restore()}cx.globalCompositeOperation="source-over";
-  glow(W/2,H*.46,620,"#e8a84a",.45*a);embers(t,60,"#ffd68a",50,20)},(t)=>{
+  BG();const a=clamp((t-170)/1.2);photo("palm_leaf",{z:1.0,ay:.5,alpha:.32*a,filter:"brightness(.7) saturate(1.2)"});
+  cx.globalCompositeOperation="lighter";for(let i=0;i<14;i++){cx.save();cx.translate(W/2,H*.46);cx.rotate(i*Math.PI/7+t*.03);const g=cx.createLinearGradient(0,0,900,0);g.addColorStop(0,"rgba(255,200,110,.16)");g.addColorStop(1,"rgba(255,200,110,0)");cx.fillStyle=g;cx.globalAlpha=a;cx.beginPath();cx.moveTo(0,-14);cx.lineTo(900,-60);cx.lineTo(900,60);cx.lineTo(0,14);cx.fill();cx.restore()}cx.globalCompositeOperation="source-over";
+  glow(W/2,H*.46,620,"#e8a84a",.4*a);embers(t,60,"#ffd68a",50,20)},(t)=>{
   const f=Math.exp(-(t-170)*5)*(t>=170?1:0);if(f>0){cx.fillStyle=`rgba(255,240,210,${f*.7})`;cx.fillRect(0,0,W,H)}
   text("வேள்பாரி","",170.2,179,t,{y:H*.52,size:240,col:"#f9d58a"});
   text("","THE LAST HILL KING",172,179,t,{y:H*.52-300,size:40,subSize:58,subCol:"#f3e7cf"});
-  text("","FULL DOCUMENTARY  ·  COMING SOON",175,179.2,t,{y:H*.80,size:30,subSize:34,subCol:"#e8b25a"});
-  text("","Inspired by the novel “Veera Yuga Nayagan Vel Pari” by Su. Venkatesan  ·  Sangam poetry of Kapilar",175.6,179.2,t,{y:H*.885,size:22,subSize:22,subCol:"#a99c80"});
+  text("","FULL DOCUMENTARY  ·  COMING SOON",175,179.2,t,{y:H*.78,size:30,subSize:34,subCol:"#e8b25a"});
+  text("","Inspired by the novel “Veera Yuga Nayagan Vel Pari” by Su. Venkatesan  ·  Sangam poetry of Kapilar",175.6,179.2,t,{y:H*.865,size:22,subSize:22,subCol:"#b3a687"});
+  text("","Photography: Wikimedia Commons contributors (credits in description)",176,179.2,t,{y:H*.89,size:20,subSize:20,subCol:"#8f8468"});
 });
 
 /* ---------- compositor ---------- */

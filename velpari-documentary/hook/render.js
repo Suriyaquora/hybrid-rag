@@ -3,8 +3,8 @@
 const { chromium } = require('playwright'); const { spawn } = require('child_process'); const path = require('path');
 (async () => {
   const [out, wav, fpsArg, s0, s1] = process.argv.slice(2); const fps = +(fpsArg || 30), a = +(s0 || 0), b = +(s1 || 180);
-  const br = await chromium.launch(); const pg = await br.newPage({ viewport: { width: 1920, height: 1080 } });
-  await pg.goto('file://' + path.resolve(__dirname, 'hook.html') + '?render=1'); await pg.evaluate(() => window.fontsReady); await pg.waitForTimeout(300);
+  const br = await chromium.launch({args:['--allow-file-access-from-files']}); const pg = await br.newPage({ viewport: { width: 1920, height: 1080 } });
+  await pg.goto('file://' + path.resolve(__dirname, 'hook.html') + '?render=1'); await pg.evaluate(() => Promise.all([window.fontsReady,window.assetsReady])); await pg.waitForTimeout(300);
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
     '-ss', String(a), '-t', String(b - a), '-i', wav, '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '256k', '-shortest', '-movflags', '+faststart', out], { stdio: ['pipe', 'inherit', 'inherit'] });

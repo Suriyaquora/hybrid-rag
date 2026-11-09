@@ -2,10 +2,10 @@
 const { chromium } = require('playwright'); const path=require('path'), fs=require('fs');
 (async()=>{
   const out=process.argv[2]; fs.mkdirSync(out,{recursive:true});
-  const b=await chromium.launch(); const p=await b.newPage({viewport:{width:1920,height:1080}});
+  const b=await chromium.launch({args:['--allow-file-access-from-files']}); const p=await b.newPage({viewport:{width:1920,height:1080}});
   const errs=[]; p.on('pageerror',e=>errs.push(e.message));
   await p.goto('file://'+path.resolve(__dirname,'hook.html')+'?render=1');
-  await p.evaluate(()=>window.fontsReady);await p.waitForTimeout(300);
+  await p.evaluate(()=>Promise.all([window.fontsReady,window.assetsReady]));await p.waitForTimeout(300);
   for(const t of process.argv.slice(3)){
     await p.evaluate(t=>window.drawAt(+t),t);
     const data=await p.evaluate(()=>document.getElementById('c').toDataURL('image/png').split(',')[1]);
